@@ -1,0 +1,9 @@
+{
+  "name": "confirmItem",
+  "version": "1.0.0",
+  "description": "确认提取结果入库：日程/待办/收藏",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

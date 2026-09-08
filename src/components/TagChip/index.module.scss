@@ -1,0 +1,26 @@
+@use '@/styles/variables.scss' as *;
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 $spacing-md;
+  height: 52rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  background: $color-bg-hover;
+  border-radius: $radius-button;
+  white-space: nowrap;
+  margin-right: $spacing-sm;
+  margin-bottom: $spacing-sm;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.85;
+  }
+}
+
+.active {
+  color: $color-text-white;
+  background: $color-primary;
+  font-weight: $font-weight-medium;
+}

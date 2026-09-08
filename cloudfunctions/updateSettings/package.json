@@ -1,0 +1,9 @@
+{
+  "name": "updateSettings",
+  "version": "1.0.0",
+  "description": "更新用户习惯设置（称呼/晨报时间/偏好）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

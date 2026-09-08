@@ -1,0 +1,9 @@
+{
+  "name": "extract",
+  "version": "1.0.0",
+  "description": "LLM 结构化提取：转发内容 → 日程/待办/收藏摘要",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

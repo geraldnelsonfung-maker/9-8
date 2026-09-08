@@ -1,0 +1,42 @@
+// ============================================
+// 主题配色变量 —— 「晨光」主题（私人晨报助理）
+// ============================================
+
+// 品牌主题色：晨光橙（黎明、温暖、精力）
+$color-primary: #ff7a45;
+$color-primary-light: #ffa06b;
+$color-primary-dark: #e85d2a;
+
+// 辅助色：晨空蓝（语音、对话、信息）
+$color-secondary: #5b8def;
+$color-secondary-light: #8fb2f5;
+
+// 功能色
+$color-success: #00b42a;
+$color-warning: #ff7d00;
+$color-error: #f53f3f;
+$color-info: #165dff;
+
+// 业务色
+$color-gold: #f7ba1e;        // 订阅/会员标识
+$color-voice-bg: #fff3ec;    // 语音按钮浅底
+$color-todo-bg: #f0f5ff;     // 待办浅底
+$color-event-bg: #fff7e8;    // 日程浅底
+$color-sub-gradient: linear-gradient(135deg, #ff9a76 0%, #ff7a45 100%); // 会员卡渐变
+
+// 背景色
+$color-bg-page: #f7f8fa;
+$color-bg-card: #ffffff;
+$color-bg-hover: #f2f3f5;
+$color-bg-header: #fff3ec;   // 页面顶部晨光渐变起点
+
+// 文本色
+$color-text-primary: #1d2129;
+$color-text-secondary: #4e5969;
+$color-text-tertiary: #86909c;
+$color-text-disabled: #c9cdd4;
+$color-text-white: #ffffff;
+
+// 边框色
+$color-border: #e5e6eb;
+$color-divider: #f2f3f5;

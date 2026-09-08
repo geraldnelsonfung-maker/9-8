@@ -1,0 +1,9 @@
+{
+  "name": "createOrder",
+  "version": "1.0.0",
+  "description": "创建订阅订单（微信支付需主体资质，接入后补统一下单）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

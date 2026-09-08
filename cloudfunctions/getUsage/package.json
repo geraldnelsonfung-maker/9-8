@@ -1,0 +1,9 @@
+{
+  "name": "getUsage",
+  "version": "1.0.0",
+  "description": "用量查询：语音额度与收藏数量",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

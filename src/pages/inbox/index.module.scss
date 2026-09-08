@@ -1,0 +1,250 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding: $spacing-md $page-padding 80rpx;
+}
+
+.howTo {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-md;
+  padding: $spacing-md $spacing-lg;
+  background: $color-voice-bg;
+  border-radius: $radius-md;
+  margin-bottom: $spacing-md;
+}
+
+.howIcon {
+  font-size: 34rpx;
+}
+
+.howText {
+  flex: 1;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+}
+
+.inputCard {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+}
+
+.inputTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-md;
+}
+
+.textarea {
+  width: 100%;
+  height: 220rpx;
+  background: $color-bg-page;
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  font-size: $font-size-md;
+  box-sizing: border-box;
+}
+
+.extractButton {
+  @include button-reset;
+  width: 100%;
+  height: $button-height-md;
+  border-radius: $radius-button;
+  background: $color-sub-gradient;
+  color: $color-text-white;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  margin-top: $spacing-md;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
+
+.disabled {
+  opacity: 0.5;
+}
+
+.resultCard {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+}
+
+.resultHeader {
+  display: flex;
+  align-items: center;
+  margin-bottom: $spacing-lg;
+}
+
+.resultTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.resultMeta {
+  margin-left: auto;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.itemRow {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-md;
+  padding: $spacing-md;
+  border-radius: $radius-md;
+  margin-bottom: $spacing-sm;
+}
+
+.eventRow {
+  background: $color-event-bg;
+}
+
+.todoRow {
+  background: $color-todo-bg;
+}
+
+.collectionRow {
+  background: $color-voice-bg;
+}
+
+.check {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: $radius-sm;
+  border: 2rpx solid $color-text-disabled;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4rpx;
+  flex-shrink: 0;
+}
+
+.checked {
+  background: $color-primary;
+  border-color: $color-primary;
+}
+
+.checkIcon {
+  font-size: 24rpx;
+  color: $color-text-white;
+}
+
+.itemBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.itemTitleInput {
+  height: 64rpx;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+  background: transparent;
+  border-bottom: 1rpx solid $color-border;
+  padding: 0 0 4rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.itemTimeInput {
+  height: 56rpx;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  background: transparent;
+  padding: 0;
+  margin-top: 4rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.itemSummary {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+  @include text-ellipsis-multi(3);
+}
+
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: $spacing-sm;
+}
+
+.miniTag {
+  font-size: $font-size-xs;
+  color: $color-primary-dark;
+  background: rgba(255, 122, 69, 0.12);
+  border-radius: $radius-xs;
+  padding: 2rpx $spacing-sm;
+  margin-right: $spacing-sm;
+}
+
+.confirmButton {
+  @include button-reset;
+  width: 100%;
+  height: $button-height-md;
+  border-radius: $radius-button;
+  background: $color-primary;
+  color: $color-text-white;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
+
+.historyTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-secondary;
+  margin: $spacing-lg 0 $spacing-sm 8rpx;
+}
+
+.historyItem {
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  background: $color-bg-card;
+  border-radius: $radius-md;
+  padding: $spacing-md $spacing-lg;
+  margin-bottom: $spacing-sm;
+}
+
+.historyIcon {
+  font-size: 30rpx;
+}
+
+.historyBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.historyText {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  @include text-ellipsis;
+}
+
+.historyMeta {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  margin-top: 4rpx;
+}

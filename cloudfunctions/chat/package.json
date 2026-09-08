@@ -1,0 +1,9 @@
+{
+  "name": "chat",
+  "version": "1.0.0",
+  "description": "语音/文字对话意图处理（改期/完成/查询），含免费额度校验",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

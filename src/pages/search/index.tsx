@@ -1,0 +1,126 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, Input, ScrollView } from '@tarojs/components';
+import Taro from '@tarojs/taro';
+import { apiGetBriefing, apiGetLibrary } from '@/services/api';
+import { formatEventTime } from '@/utils/date';
+import { brandVars, useThemeStore } from '@/store/theme';
+import type { Briefing, CollectionItem } from '@/types';
+import styles from './index.module.scss';
+
+interface SearchResult {
+  events: Briefing['events'];
+  todos: Briefing['todos'];
+  collections: CollectionItem[];
+}
+
+function SearchPage() {
+  const { theme } = useThemeStore();
+  const [keyword, setKeyword] = useState('');
+  const [briefing, setBriefing] = useState<Briefing | null>(null);
+  const [library, setLibrary] = useState<CollectionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [b, lib] = await Promise.all([apiGetBriefing(), apiGetLibrary()]);
+        setBriefing(b);
+        setLibrary(lib);
+      } catch (err) {
+        console.error('[SearchPage] load data failed:', err);
+        Taro.showToast({ title: '数据加载失败', icon: 'none' });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const result: SearchResult = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    if (!kw) return { events: [], todos: [], collections: [] };
+    const hit = (text?: string) => !!text && text.toLowerCase().includes(kw);
+    return {
+      events: (briefing?.events || []).filter((e) => hit(e.title) || hit(e.location)),
+      todos: (briefing?.todos || []).filter((t) => hit(t.title)),
+      collections: library.filter((c) => hit(c.title) || hit(c.summary) || c.tags.some(hit))
+    };
+  }, [keyword, briefing, library]);
+
+  const total = result.events.length + result.todos.length + result.collections.length;
+
+  const goBackWithPick = useCallback((label: string) => {
+    Taro.showToast({ title: `已找到「${label.slice(0, 8)}」`, icon: 'none' });
+  }, []);
+
+  return (
+    <View className={styles.page} style={brandVars(theme)}>
+      <View className={styles.searchBar}>
+        <Input
+          className={styles.searchInput}
+          value={keyword}
+          placeholder='搜索日程、待办、收藏…'
+          focus
+          confirmType='search'
+          onInput={(e) => setKeyword(e.detail.value)}
+          onConfirm={() => setKeyword((k) => k.trim())}
+        />
+      </View>
+
+      {loading ? (
+        <View className={styles.hint}>
+          <Text>加载中…</Text>
+        </View>
+      ) : !keyword.trim() ? (
+        <View className={styles.hint}>
+          <Text className={styles.hintIcon}>🔍</Text>
+          <Text>输入关键词，找回你存过的任何东西</Text>
+        </View>
+      ) : total === 0 ? (
+        <View className={styles.hint}>
+          <Text className={styles.hintIcon}>🫙</Text>
+          <Text>没有找到与「{keyword.trim()}」相关的内容</Text>
+        </View>
+      ) : (
+        <ScrollView scrollY className={styles.results}>
+          {result.events.length > 0 ? (
+            <View className={styles.group}>
+              <Text className={styles.groupTitle}>📅 日程 · {result.events.length}</Text>
+              {result.events.map((evt) => (
+                <View key={evt.id} className={styles.row} onClick={() => goBackWithPick(evt.title)}>
+                  <Text className={styles.rowMain}>{evt.title}</Text>
+                  <Text className={styles.rowMeta}>{formatEventTime(evt.startTime)}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {result.todos.length > 0 ? (
+            <View className={styles.group}>
+              <Text className={styles.groupTitle}>✅ 待办 · {result.todos.length}</Text>
+              {result.todos.map((todo) => (
+                <View key={todo.id} className={styles.row} onClick={() => goBackWithPick(todo.title)}>
+                  <Text className={styles.rowMain}>{todo.title}</Text>
+                  <Text className={styles.rowMeta}>{todo.dueDate ? formatEventTime(todo.dueDate) : '无截止'}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {result.collections.length > 0 ? (
+            <View className={styles.group}>
+              <Text className={styles.groupTitle}>🔖 收藏 · {result.collections.length}</Text>
+              {result.collections.map((item) => (
+                <View key={item.id} className={styles.row} onClick={() => goBackWithPick(item.title)}>
+                  <Text className={styles.rowMain}>{item.title}</Text>
+                  <Text className={styles.rowMeta}>{item.tags.join(' / ') || item.sourceType}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+export default SearchPage;

@@ -1,0 +1,276 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding: $spacing-md $page-padding 80rpx;
+}
+
+.userCard {
+  display: flex;
+  align-items: center;
+  gap: $spacing-lg;
+  padding: $spacing-lg;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  margin-bottom: $spacing-md;
+}
+
+.avatar {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: $radius-round;
+  background: $color-sub-gradient;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatarText {
+  font-size: 44rpx;
+}
+
+.userBody {
+  flex: 1;
+}
+
+.nickname {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: 4rpx;
+}
+
+.userMeta {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.subBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4rpx $spacing-md;
+  background: rgba(247, 186, 30, 0.15);
+  border-radius: $radius-button;
+}
+
+.subBadgeText {
+  font-size: $font-size-xs;
+  color: $color-gold;
+  font-weight: $font-weight-medium;
+}
+
+.subCard {
+  background: $color-sub-gradient;
+  border-radius: $radius-lg;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+  box-shadow: $shadow-card;
+}
+
+.subTitle {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-white;
+  margin-bottom: $spacing-xs;
+}
+
+.subDesc {
+  font-size: $font-size-sm;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: $line-height-loose;
+  margin-bottom: $spacing-lg;
+}
+
+.subActions {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.priceTag {
+  flex: 1;
+  font-size: $font-size-sm;
+  color: $color-text-white;
+
+  .price {
+    font-size: 44rpx;
+    font-weight: $font-weight-bold;
+    margin-right: 4rpx;
+  }
+
+  .priceNote {
+    opacity: 0.85;
+  }
+}
+
+.subButton {
+  @include button-reset;
+  width: auto; // 覆盖 taro-button-core 默认 width:100%
+  height: $button-height-md;
+  padding: 0 $spacing-xl;
+  border-radius: $radius-button;
+  background: $color-text-white;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: var(--brand-deep, #{$color-primary-dark});
+  white-space: nowrap;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
+
+.quotaCard {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+}
+
+.quotaTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-lg;
+}
+
+.quotaRow {
+  margin-bottom: $spacing-lg;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.quotaHead {
+  display: flex;
+  align-items: center;
+  margin-bottom: $spacing-sm;
+}
+
+.quotaLabel {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.quotaValue {
+  margin-left: auto;
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.bar {
+  height: 16rpx;
+  background: $color-bg-hover;
+  border-radius: $radius-button;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: $color-sub-gradient;
+  border-radius: $radius-button;
+  transition: width $transition-base;
+}
+
+.barFillWarning {
+  height: 100%;
+  background: $color-warning;
+  border-radius: $radius-button;
+  transition: width $transition-base;
+}
+
+.settingCard {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  min-height: 96rpx;
+  border-bottom: 1rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.settingLabel {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.settingValue {
+  margin-left: auto;
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+}
+
+.settingInput {
+  text-align: right;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  width: 240rpx;
+}
+
+.arrow {
+  color: $color-text-disabled;
+  font-size: $font-size-sm;
+}
+
+.swatchList {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+}
+
+.swatch {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: $radius-round;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: $shadow-card;
+  transition: transform $transition-fast;
+
+  &:active {
+    transform: scale(0.9);
+  }
+}
+
+.swatchActive {
+  box-shadow: 0 0 0 4rpx #ffffff inset, $shadow-card-hover;
+}
+
+.swatchCheck {
+  font-size: 24rpx;
+  color: $color-text-white;
+  font-weight: $font-weight-bold;
+}
+
+.privacyCard {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  padding: $spacing-lg;
+}
+
+.privacyText {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  line-height: $line-height-loose;
+}
