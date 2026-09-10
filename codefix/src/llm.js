@@ -47,6 +47,7 @@ async function callOpenaiCompatible({ baseUrl, apiKey, model, userPrompt, jsonMo
   const payload = {
     model,
     temperature: 0,
+    max_tokens: 8192,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
