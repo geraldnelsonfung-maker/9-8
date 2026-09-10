@@ -128,6 +128,8 @@ export interface ChatMessage {
   duration?: number;
   /** 是否由深度思考模式生成 */
   deep?: boolean;
+  /** AI 附带图片（真实内容图：资讯封面/商品图等） */
+  image?: string;
   createTime: string;
 }
 
@@ -140,6 +142,8 @@ export interface HotspotNews {
   source: string;
   /** 原文链接（若有） */
   url?: string;
+  /** 真实配图（RSS media/enclosure/正文首图；AI 发图来源） */
+  image?: string;
   tags: string[];
   createTime: string;
 }

@@ -9,7 +9,8 @@ const https = require('https');
 const { URL } = require('url');
 
 function callLLM(messages, jsonMode, options) {
-  const apiKey = process.env.LLM_API_KEY;
+  // 支持视觉模型独立密钥（如智谱 LLM_VISION_API_KEY），未配置则回退主力 LLM_API_KEY
+  const apiKey = (options && options.apiKey) || process.env.LLM_API_KEY;
   if (!apiKey) {
     throw new Error('LLM_API_KEY not configured');
   }

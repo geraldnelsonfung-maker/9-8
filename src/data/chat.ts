@@ -3,6 +3,7 @@ import Taro from '@tarojs/taro';
 import dayjs from 'dayjs';
 import type { ScheduleEvent, TodoItem } from '../types';
 import { readPlan, writePlan, nextId } from './dailyPlan';
+import getHotspot from './getHotspot';
 
 const SHOPPING_STORAGE_KEY = 'shoppingList';
 
@@ -50,13 +51,14 @@ export default async function chat(data?: {
   const localIntent =
     matchBatchSchedule(msg) ||
     /帮我安排|排一下|帮我约|重新排|排班|确认|就这么排|取消|算了/.test(msg) ||
+    /热点|新闻|资讯|热搜/.test(msg) ||
     matchShopList(msg) ||
     matchDailyPlan(msg);
 
   // 自由对话/深度思考/购物分析 → 本地 LLM 代理（DeepSeek）；代理未启动自动降级 mock
   if (!localIntent) {
     try {
-      const res = await fetch('http://localhost:8138/chat', {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -96,6 +98,7 @@ export default async function chat(data?: {
   }
 
   let reply = '好的，已收到你的指令。';
+  let replyImage: string | undefined;
   // F24 批量/周期排班：固定每周会议、一句话多条日程（优先于单条排班建议）
   if (matchBatchSchedule(msg)) reply = handleBatchSchedule(msg);
   else if (/帮我安排|排一下|帮我约|重新排|排班/.test(msg))
@@ -103,6 +106,12 @@ export default async function chat(data?: {
       '我对照了你的日程：周五 14:00-16:00 有「和设计师对齐视觉稿」，你说的会建议排到 16:30-17:30，刚好留出缓冲。\n回复「确认」我就写入日程，或告诉我别的时段。';
   else if (/确认|就这么排/.test(msg)) reply = '已写入日程：本周五 16:30-17:30，晨报会同步更新。';
   else if (/取消|算了/.test(msg)) reply = '已取消该操作。';
+  // AI 发图：热点/资讯类查询附真实资讯封面图（F25）
+  else if (/热点|新闻|资讯|热搜/.test(msg)) {
+    const newsRes = handleNewsQuery();
+    reply = newsRes.reply;
+    replyImage = newsRes.image;
+  }
   // 购物清单操作：读 / 添加 / 标记已买（意图词具体，须排在宽泛的日程查询之前，
   // 否则「购物清单里有什么」会被日程查询的「有什么」抢先命中）
   else if (matchShopList(msg)) {
@@ -116,7 +125,22 @@ export default async function chat(data?: {
   else if (matchShopping(msg)) {
     reply = shoppingAnalyze(msg);
   }
-  return { reply, action: 'none' };
+  return { reply, action: 'none', image: replyImage };
+}
+
+/** 热点/资讯类查询：mock 数据取前 2 条 + 首条封面图（真实端由云函数走 RSS 抽图） */
+function handleNewsQuery(): { reply: string; action: string; image?: string } {
+  const news = getHotspot();
+  if (news.length === 0) {
+    return { reply: '今天的热点还没抓到，稍后再问我一次。', action: 'query' };
+  }
+  const top = news.slice(0, 2);
+  const lines = [
+    '📰 今天值得看的热点：',
+    ...top.map((n, i) => `${i + 1}. ${n.title}（来源：${n.source}）`),
+    '热点页有完整资讯流，可对每条 👍/👎 告诉我口味。'
+  ];
+  return { reply: lines.join('\n'), action: 'query', image: top[0].image };
 }
 
 /* ---------------- F24 批量/周期排班（自然语言批量排班） ---------------- */

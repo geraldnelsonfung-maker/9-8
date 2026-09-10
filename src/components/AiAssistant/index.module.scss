@@ -188,6 +188,15 @@
   white-space: pre-wrap;
 }
 
+/* AI 发图（F25）：气泡内配图，点击全屏预览 */
+.msgImage {
+  display: block;
+  width: 440rpx;
+  height: 300rpx;
+  margin-top: $spacing-xs;
+  border-radius: $radius-md;
+}
+
 .inputRow {
   display: flex;
   align-items: center;

@@ -41,6 +41,21 @@
   color: $color-text-primary;
 }
 
+/* F29 全网搜索：显式触发按钮（桌面端 Enter 兼容双保险） */
+.searchGo {
+  flex-shrink: 0;
+  padding: 6rpx 20rpx;
+  border-radius: $radius-round;
+  background: var(--brand, $color-secondary);
+  color: #fff;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+
+  &:active {
+    opacity: 0.85;
+  }
+}
+
 .searchClear {
   width: 40rpx;
   height: 40rpx;
@@ -76,6 +91,19 @@
   margin-bottom: $spacing-sm;
 }
 
+/* F29 全网搜索：检索中提示条 */
+.searchingTip {
+  margin: 0 $page-padding $spacing-md;
+  padding: $spacing-sm $spacing-lg;
+  border-radius: $radius-md;
+  background: var(--brand-soft, rgba(0, 0, 0, 0.04));
+}
+
+.searchingText {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
 .newsCard {
   background: $color-bg-card;
   border-radius: $radius-lg;
@@ -88,6 +116,16 @@
     opacity: 0.92;
     transform: scale(0.99);
   }
+}
+
+/* 资讯封面图（F29）：点击全屏预览 */
+.newsImage {
+  display: block;
+  width: 100%;
+  height: 280rpx;
+  margin-bottom: $spacing-sm;
+  border-radius: $radius-md;
+  background: $color-bg-page;
 }
 
 .newsTitle {

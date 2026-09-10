@@ -37,14 +37,14 @@ export function apiGetBriefing(): Promise<Briefing> {
 /** 工作助手动作 */
 export type WorkAction = 'summary' | 'points' | 'advice';
 
-/** 语音/文字对话（deep=true 深度思考；work 传入时进入工作助手模式：总结/要点/建议） */
+/** 语音/文字对话（deep=true 深度思考；work 传入时进入工作助手模式：总结/要点/建议；image 为 AI 附带图片） */
 export function apiChat(
   message: string,
   type: 'text' | 'voice' = 'text',
   deep = false,
   work?: { action: WorkAction }
-): Promise<{ reply: string; action: string }> {
-  return callFunction<{ reply: string; action: string }>('chat', {
+): Promise<{ reply: string; action: string; image?: string }> {
+  return callFunction<{ reply: string; action: string; image?: string }>('chat', {
     message,
     type,
     deep,
@@ -61,6 +61,26 @@ export function apiGetLibrary(): Promise<CollectionItem[]> {
 /** 今日热点资讯（v2.0，来源强制标注；云函数就绪前双端走本地 mock） */
 export function apiGetHotspot(): Promise<HotspotNews[]> {
   return callFunction<HotspotNews[]>('getHotspot');
+}
+
+/** 全网资讯搜索（F29）：真机走 webSearch 云函数（Bing News RSS）；H5 返回 null，由页面本地过滤兜底 */
+export async function apiNewsSearch(keyword: string): Promise<HotspotNews[] | null> {
+  const kw = keyword.trim();
+  if (!kw) return [];
+  if (process.env.TARO_ENV !== 'weapp') return null;
+  try {
+    const res = await Taro.cloud.callFunction({
+      name: 'webSearch',
+      data: { action: 'searchNews', keyword: kw.slice(0, 30) }
+    });
+    const payload = res.result as { code: number; data: HotspotNews[] | null; message?: string };
+    if (payload && payload.code === 0 && Array.isArray(payload.data)) return payload.data;
+    console.warn('[api] newsSearch bad payload:', payload && payload.message);
+    return null;
+  } catch (err) {
+    console.warn('[api] newsSearch failed:', err);
+    return null;
+  }
 }
 
 /** 资讯反馈（F22）：记录 👍/👎，驱动内容瘦身；本地持久化 + 真机走云函数 */

@@ -20,7 +20,12 @@ export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
     plugins: ['@tarojs/plugin-html'],
     defineConstants: {},
     copy: {
-      patterns: [],
+      patterns: [
+        // TabBar PNG（微信 tabBar 仅支持 PNG，F30）+ 品牌 Logo/分享封面：H5 端 config 引用不会被自动打包，需显式拷贝
+        { from: 'src/assets/tabbar-png/', to: 'assets/tabbar-png/', ignore: ['*.svg'] },
+        { from: 'src/assets/logo.png', to: 'assets/logo.png' },
+        { from: 'src/assets/share-cover.png', to: 'assets/share-cover.png' },
+      ],
       options: {},
     },
     framework: 'react',

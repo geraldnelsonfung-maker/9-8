@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, Input } from '@tarojs/components';
+import { View, Text, ScrollView, Input, Image } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import dayjs from 'dayjs';
 import classnames from 'classnames';
 import { apiChat } from '@/services/api';
 import { useT } from '@/store/language';
+import { loadChatLog, saveChatLog } from '@/utils/chatLog';
 import styles from './index.module.scss';
 
 const isH5 = process.env.TARO_ENV === 'h5';
+/** AI 助理对话本地持久化 key（上限 60 条，由 saveChatLog 截断） */
+const AI_LOG_KEY = 'aiAssistantLog';
 
 /** 视口尺寸（px）；H5 读 window，weapp 兜底 getWindowInfo */
 const getViewport = () => {
@@ -48,6 +51,8 @@ interface AssistantMsg {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  /** AI 附带图片（F25：热点封面等真实内容图） */
+  image?: string;
   createTime: string;
 }
 
@@ -55,10 +60,17 @@ function AiAssistant({ context = '', activeHint, offset = 0 }: AiAssistantProps)
   const t = useT();
   const [open, setOpen] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
-  const [messages, setMessages] = useState<AssistantMsg[]>([]);
+  // AI 对话本地持久化：重进恢复上下文；恢复后打开面板不再重复欢迎语（messages.length > 0）
+  const [messages, setMessages] = useState<AssistantMsg[]>(() => loadChatLog<AssistantMsg>(AI_LOG_KEY));
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const msgIdRef = useRef(0);
+  // 消息 id 计数器以恢复的历史长度为起点，避免与持久化消息 id 冲突
+  const msgIdRef = useRef(messages.length);
+
+  // 对话变化落 storage（截断由 saveChatLog 兜底）
+  useEffect(() => {
+    saveChatLog(AI_LOG_KEY, messages);
+  }, [messages]);
   /** 自动弹出的主动建议每会话只弹一次，避免骚扰 */
   const hintShownRef = useRef(false);
 
@@ -89,11 +101,11 @@ function AiAssistant({ context = '', activeHint, offset = 0 }: AiAssistantProps)
     return () => clearTimeout(timer);
   }, [hintVisible]);
 
-  const push = useCallback((role: AssistantMsg['role'], content: string) => {
+  const push = useCallback((role: AssistantMsg['role'], content: string, image?: string) => {
     msgIdRef.current += 1;
     setMessages((prev) => [
       ...prev,
-      { id: `ai-msg-${msgIdRef.current}`, role, content, createTime: dayjs().toISOString() }
+      { id: `ai-msg-${msgIdRef.current}`, role, content, image, createTime: dayjs().toISOString() }
     ]);
   }, []);
 
@@ -105,7 +117,7 @@ function AiAssistant({ context = '', activeHint, offset = 0 }: AiAssistantProps)
       push('user', content);
       try {
         const res = await apiChat(content, 'text');
-        push('assistant', res.reply);
+        push('assistant', res.reply, res.image);
       } catch (err) {
         console.error('[AiAssistant] chat failed:', err);
         push('assistant', '抱歉，我刚刚走神了，请再说一次。');
@@ -115,6 +127,12 @@ function AiAssistant({ context = '', activeHint, offset = 0 }: AiAssistantProps)
     },
     [sending, push]
   );
+
+  /** 全屏预览 AI 附图（F25）；失败静默 */
+  const previewImage = useCallback((src?: string) => {
+    if (!src) return;
+    Taro.previewImage({ urls: [src] }).catch((err) => console.warn('[AiAssistant] previewImage failed:', err));
+  }, []);
 
   const handleFabTap = () => {
     // 拖动结束后浏览器会补发一次合成 click，250ms 内的点击视为拖动余波，忽略
@@ -313,6 +331,16 @@ function AiAssistant({ context = '', activeHint, offset = 0 }: AiAssistantProps)
                   className={classnames(styles.msgBubble, m.role === 'user' ? styles.msgBubbleUser : styles.msgBubbleAi)}
                 >
                   <Text className={styles.msgText}>{m.content}</Text>
+                  {/* AI 发图（F25）：点击全屏预览 */}
+                  {m.image ? (
+                    <Image
+                      src={m.image}
+                      mode='aspectFill'
+                      lazyLoad
+                      className={styles.msgImage}
+                      onClick={() => previewImage(m.image)}
+                    />
+                  ) : null}
                 </View>
               </View>
             ))}

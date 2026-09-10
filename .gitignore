@@ -37,3 +37,5 @@ Thumbs.db
 dist-preview/
 static-server.log*
 .codefix/
+
+dist-weapp/

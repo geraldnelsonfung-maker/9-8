@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, Input, Button } from '@tarojs/components';
-import Taro, { usePullDownRefresh, useDidHide } from '@tarojs/taro';
+import { View, Text, ScrollView, Input, Button, Image } from '@tarojs/components';
+import Taro, { usePullDownRefresh, useDidHide, useShareAppMessage } from '@tarojs/taro';
 import dayjs from 'dayjs';
 import classnames from 'classnames';
 import VoiceButton, { VoiceResult } from '@/components/VoiceButton';
@@ -12,10 +12,13 @@ import { getGreeting, formatEventTime } from '@/utils/date';
 import { logActivity } from '@/utils/activityLog';
 import { computeAdaptive } from '@/utils/adaptive';
 import { splitTtsChunks, startSpeak, stopSpeak } from '@/utils/tts';
+import { loadChatLog, saveChatLog } from '@/utils/chatLog';
+import { TERMS_TEXT, PRIVACY_TEXT, AI_SERVICES_TEXT, hasAgreedConsent, saveConsent } from '@/data/legal';
 import type { Briefing, ChatMessage } from '@/types';
 import { useT, useLanguageStore } from '@/store/language';
 import type { LangKey } from '@/store/language';
 import styles from './index.module.scss';
+import shareCover from '@/assets/share-cover.png';
 
 const isWeapp = process.env.TARO_ENV === 'weapp';
 /** H5 预览端底部有 50px TabBar，输入栏需避让 */
@@ -30,6 +33,9 @@ const QUICK_COMMANDS: Array<{ icon: string; labelKey: LangKey; text: string }> =
 ];
 /** 订阅消息模板 ID：上线前在小程序后台申请后替换（TODO） */
 const SUBSCRIBE_TEMPLATE_ID = 'TODO_TEMPLATE_ID';
+
+/** AI 对话本地持久化 key（上限 60 条） */
+const BRIEFING_CHAT_LOG_KEY = 'briefingChatLog';
 /** H5 预览时模拟语音转写的示例指令 */
 const MOCK_TRANSCRIPTS = [
   '把产品评审会改到明天下午两点',
@@ -44,7 +50,11 @@ function BriefingPage() {
   const lang = useLanguageStore((s) => s.lang);
   const { theme } = useThemeStore();
   const [briefing, setBriefing] = useState<Briefing | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // AI 对话本地持久化：重进恢复上下文（上限 60 条，超限截旧）
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const restored = loadChatLog<ChatMessage>(BRIEFING_CHAT_LOG_KEY);
+    return restored;
+  });
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [deepMode, setDeepMode] = useState(false);
@@ -52,7 +62,30 @@ function BriefingPage() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const { profile, usage, init, refreshUsage } = useUserStore();
   const mockIndexRef = useRef(0);
-  const msgIdRef = useRef(0);
+  // 消息 id 计数器以恢复的历史长度为起点，避免与持久化消息 id 冲突
+  const msgIdRef = useRef(messages.length);
+
+  // H5 首启合规同意（小程序端依赖微信平台隐私弹窗机制，仅网页端启用）
+  const [showConsent, setShowConsent] = useState(() => isH5 && !hasAgreedConsent());
+  const [consentDeclined, setConsentDeclined] = useState(false);
+  const handleConsentAgree = () => {
+    saveConsent();
+    setConsentDeclined(false);
+    setShowConsent(false);
+  };
+  const handleConsentDecline = () => setConsentDeclined(true);
+
+  // 对话变化落 storage（截断由 saveChatLog 兜底）
+  useEffect(() => {
+    saveChatLog(BRIEFING_CHAT_LOG_KEY, messages);
+  }, [messages]);
+
+  // 转发分享（F30）：带品牌分享封面
+  useShareAppMessage(() => ({
+    title: t('share.title'),
+    path: '/pages/briefing/index',
+    imageUrl: shareCover
+  }));
 
   const loadBriefing = useCallback(async () => {
     try {
@@ -84,13 +117,19 @@ function BriefingPage() {
     role: ChatMessage['role'],
     content: string,
     type: ChatMessage['type'] = 'text',
-    deep = false
+    deep = false,
+    image?: string
   ) => {
     msgIdRef.current += 1;
     setMessages((prev) => [
       ...prev,
-      { id: `msg-${msgIdRef.current}`, role, type, deep, content, createTime: dayjs().toISOString() }
+      { id: `msg-${msgIdRef.current}`, role, type, deep, content, image, createTime: dayjs().toISOString() }
     ]);
+  };
+
+  /** 全屏预览 AI 附图（F25）；预览失败静默（图片仍在气泡内可见） */
+  const previewImage = (src: string) => {
+    Taro.previewImage({ urls: [src] }).catch((err) => console.warn('[BriefingPage] previewImage failed:', err));
   };
 
   const askAssistant = async (message: string, type: 'text' | 'voice') => {
@@ -99,7 +138,7 @@ function BriefingPage() {
     pushMessage('user', message, type);
     try {
       const res = await apiChat(message, type, deepMode);
-      pushMessage('assistant', res.reply, 'text', deepMode);
+      pushMessage('assistant', res.reply, 'text', deepMode, res.image);
       logActivity(deepMode ? '🧠' : '💬', deepMode ? `深度思考：${message.slice(0, 14)}` : `AI 对话：${message.slice(0, 14)}`);
     } catch (err) {
       console.error('[BriefingPage] chat failed:', err);
@@ -444,6 +483,16 @@ function BriefingPage() {
                   {msg.type === 'voice' ? <Text className={styles.voiceTag}>🎙 </Text> : null}
                   {msg.deep ? <Text className={styles.deepTag}>🧠 深思 </Text> : null}
                   <Text>{msg.content}</Text>
+                  {/* AI 发图（F25）：点击全屏预览 */}
+                  {msg.image ? (
+                    <Image
+                      src={msg.image}
+                      mode='aspectFill'
+                      lazyLoad
+                      className={styles.msgImage}
+                      onClick={() => previewImage(msg.image as string)}
+                    />
+                  ) : null}
                 </View>
               </View>
             ))}
@@ -494,6 +543,40 @@ function BriefingPage() {
           </Button>
         </View>
       </View>
+
+      {/* H5 首启合规同意层：未同意前阻断使用（仅网页端渲染） */}
+      {showConsent ? (
+        <View className={styles.consentMask}>
+          <View className={styles.consentPanel}>
+            <Text className={styles.consentTitle}>服务协议与隐私政策</Text>
+            {consentDeclined ? (
+              <View className={styles.consentDeclinedBox}>
+                <Text className={styles.consentDeclinedText}>
+                  你未同意上述协议，暂时无法使用本服务。
+                  {'\n'}如改变主意，可点击下方「同意并继续」。
+                </Text>
+              </View>
+            ) : (
+              <ScrollView scrollY className={styles.consentBody}>
+                <Text className={styles.consentText}>{PRIVACY_TEXT}</Text>
+                <Text className={styles.consentText}>{'\n\n'}</Text>
+                <Text className={styles.consentText}>{TERMS_TEXT}</Text>
+                <Text className={styles.consentText}>{'\n\n'}</Text>
+                <Text className={styles.consentText}>{AI_SERVICES_TEXT}</Text>
+              </ScrollView>
+            )}
+            <Text className={styles.consentHint}>继续使用前，请阅读并同意以上协议</Text>
+            <View className={styles.consentActions}>
+              <Button className={styles.consentDecline} onClick={handleConsentDecline}>
+                不同意
+              </Button>
+              <Button className={styles.consentAgree} onClick={handleConsentAgree}>
+                同意并继续
+              </Button>
+            </View>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }

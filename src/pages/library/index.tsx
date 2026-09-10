@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, Input } from '@tarojs/components';
+import { View, Text, ScrollView, Input, Image } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import dayjs from 'dayjs';
 import classnames from 'classnames';
 import TagChip from '@/components/TagChip';
 import EmptyState from '@/components/EmptyState';
-import { apiGetLibrary, apiGetHotspot } from '@/services/api';
+import { apiGetLibrary, apiGetHotspot, apiNewsSearch } from '@/services/api';
 import { useUserStore } from '@/store/user';
 import { fromNow } from '@/utils/date';
 import { logActivity } from '@/utils/activityLog';
@@ -63,6 +63,11 @@ function LibraryPage() {
   const t = useT();
   const [items, setItems] = useState<CollectionItem[]>([]);
   const [news, setNews] = useState<HotspotNews[]>([]);
+  const [activeNewsTag, setActiveNewsTag] = useState('全部');
+  // F29 全网搜索：回车触发；真机走 webSearch 云函数（Bing News RSS），H5 预览/云端空结果走本地过滤兜底
+  const [searchMode, setSearchMode] = useState(false);
+  const [searchResults, setSearchResults] = useState<HotspotNews[]>([]);
+  const [searching, setSearching] = useState(false);
   const [activeTag, setActiveTag] = useState('全部');
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(true);
@@ -102,12 +107,20 @@ function LibraryPage() {
     [items, activeTag, keyword]
   );
 
+  /** 资讯分类频道（F29）：全部 + 出现过的标签，超 8 个截断 */
+  const newsTags = useMemo(
+    () => ['全部', ...Array.from(new Set(news.flatMap((n) => n.tags))).slice(0, 8)],
+    [news]
+  );
+
   const newsFiltered = useMemo(
     () =>
-      keyword
-        ? news.filter((n) => n.title.includes(keyword) || n.summary.includes(keyword))
-        : news,
-    [news, keyword]
+      news.filter(
+        (n) =>
+          (activeNewsTag === '全部' || n.tags.includes(activeNewsTag)) &&
+          (!keyword || n.title.includes(keyword) || n.summary.includes(keyword))
+      ),
+    [news, activeNewsTag, keyword]
   );
 
   const handleCopy = (item: CollectionItem) => {
@@ -121,6 +134,42 @@ function LibraryPage() {
     recordBrowseHistory({ id: item.id, title: item.title, source: item.source });
     logActivity('🔥', `浏览热点：${item.title.slice(0, 14)}`);
     Taro.showToast({ title: `来源：${item.source}`, icon: 'none', duration: 1500 });
+  };
+
+  /** 点封面图全屏预览（F29）；不触发卡片浏览行为 */
+  const handleNewsImageTap = (item: HotspotNews) => {
+    if (!item.image) return;
+    Taro.previewImage({ urls: [item.image] }).catch((err) =>
+      console.warn('[LibraryPage] previewImage failed:', err)
+    );
+  };
+
+  /** 全网搜索（F29）：搜索键触发；云端无结果时回退本地热点过滤 */
+  const handleNewsSearch = async () => {
+    const kw = keyword.trim();
+    if (!kw) {
+      setSearchMode(false);
+      setSearchResults([]);
+      return;
+    }
+    setSearchMode(true);
+    setSearching(true);
+    const online = await apiNewsSearch(kw);
+    const local = news.filter(
+      (n) => n.title.includes(kw) || n.summary.includes(kw) || n.tags.some((tg) => tg.includes(kw))
+    );
+    setSearchResults(online && online.length ? online : local);
+    setSearching(false);
+    if (online && online.length) {
+      logActivity('🔎', `全网搜索：${kw.slice(0, 14)}`);
+    }
+  };
+
+  /** 清空关键词并退出全网搜索模式 */
+  const handleClearSearch = () => {
+    setKeyword('');
+    setSearchMode(false);
+    setSearchResults([]);
   };
 
   /** 资讯反馈（F22）：👍 有用 / 👎 不感兴趣；再点一次取消；本地持久化 + 云端落库 */
@@ -154,25 +203,64 @@ function LibraryPage() {
           placeholder={t('library.searchPlaceholder')}
           confirmType='search'
           onInput={(e) => setKeyword(e.detail.value)}
+          onConfirm={() => handleNewsSearch()}
         />
         {keyword ? (
-          <Text className={styles.searchClear} onClick={() => setKeyword('')}>
+          <Text className={styles.searchGo} onClick={() => handleNewsSearch()}>
+            {t('library.searchGo')}
+          </Text>
+        ) : null}
+        {keyword ? (
+          <Text className={styles.searchClear} onClick={handleClearSearch}>
             ✕
           </Text>
         ) : null}
       </View>
 
-      {newsFiltered.length > 0 ? (
+      {searchMode || newsFiltered.length > 0 ? (
         <View className={styles.hotspot}>
           <View className={styles.sectionBar}>
-            <Text className={styles.sectionBarIcon}>🔥</Text>
-            <Text className={styles.sectionBarTitle}>{t('library.hotTitle')}</Text>
-            <Text className={styles.sectionBarHint}>{t('library.hotHint')}</Text>
+            <Text className={styles.sectionBarIcon}>{searchMode ? '🔎' : '🔥'}</Text>
+            <Text className={styles.sectionBarTitle}>
+              {searchMode ? `${t('library.searchOnlineTitle')} · ${keyword.trim().slice(0, 12)}` : t('library.hotTitle')}
+            </Text>
+            <Text className={styles.sectionBarHint}>{searchMode ? t('library.searchOnlineHint') : t('library.hotHint')}</Text>
           </View>
-          {newsFiltered.map((item) => {
+          {!searchMode && newsTags.length > 2 ? (
+            <View className={styles.filterBar}>
+              <ScrollView scrollX className={styles.chipScroll}>
+                {newsTags.map((tag) => (
+                  <TagChip
+                    key={tag}
+                    label={tag}
+                    active={tag === activeNewsTag}
+                    onClick={() => setActiveNewsTag(tag)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+          {searchMode && searching ? (
+            <View className={styles.searchingTip}>
+              <Text className={styles.searchingText}>{t('library.searchSearching')}</Text>
+            </View>
+          ) : null}
+          {(searchMode ? searchResults : newsFiltered).map((item) => {
             const fb = feedbackMap[item.id];
             return (
               <View key={item.id} className={styles.newsCard} onClick={() => handleNewsTap(item)}>
+                {item.image ? (
+                  <Image
+                    src={item.image}
+                    mode='aspectFill'
+                    lazyLoad
+                    className={styles.newsImage}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleNewsImageTap(item);
+                    }}
+                  />
+                ) : null}
                 <Text className={styles.newsTitle}>{item.title}</Text>
                 <Text className={styles.newsSummary}>{item.summary}</Text>
                 <View className={styles.newsMeta}>
@@ -196,6 +284,13 @@ function LibraryPage() {
               </View>
             );
           })}
+          {searchMode && !searching && searchResults.length === 0 ? (
+            <EmptyState
+              icon='🔎'
+              title={t('library.searchEmpty')}
+              hint={t('library.searchEmptyHint')}
+            />
+          ) : null}
         </View>
       ) : null}
 

@@ -8,6 +8,7 @@ import { useUiScaleStore, UI_SCALE_PRESETS } from '@/store/uiScale';
 import { useT, useLanguageStore, LANG_OPTIONS } from '@/store/language';
 import type { LangKey } from '@/store/language';
 import { apiCreateOrder, apiDeleteAccount } from '@/services/api';
+import { TERMS_TEXT, PRIVACY_TEXT, AI_SERVICES_TEXT } from '@/data/legal';
 import { fromNow } from '@/utils/date';
 import { getActivityLogs } from '@/utils/activityLog';
 import type { ActivityLogItem } from '@/utils/activityLog';
@@ -71,24 +72,8 @@ const AI_MEMORY_SEED = [
   '沟通偏好：回复偏简洁，先给结论'
 ];
 
-const TERMS_TEXT = `《用户服务协议》（正式版上线前将在此替换为完整法务文本）
-1. 本小程序为你提供消息整理、日程待办管理与晨报服务。
-2. 你转发的内容仅用于生成你的日程、待办与摘要，存储于境内服务器。
-3. 免费版含基础额度，订阅后解锁更多额度，订阅可随时取消。
-4. 你可随时在「我的-注销账号」删除全部数据。`;
+// 法务文本统一取自 src/data/legal.ts（与首启同意弹窗共用），勿在此重复声明
 
-const PRIVACY_TEXT = `《隐私政策》（正式版上线前将在此替换为完整法务文本）
-1. 我们收集：你主动转发的消息/图片、对话录音（仅识别用）、设备标识（openid）。
-2. 我们不收集：你的微信聊天记录（平台禁止，转发是唯一入口）、通讯录、位置。
-3. 浏览历史仅保存在你的手机本地，可一键清空。
-4. 数据用于生成晨报与改善服务，不用于对外共享或训练公开模型。
-5. 你可在「我的-注销账号」一键删除全部数据。`;
-
-const AI_SERVICES_TEXT = `《第三方 AI 服务说明》
-1. 本小程序的部分智能功能（含晨报摘要、内容整理、购物比价、AI 对话等）调用第三方大模型服务（如 DeepSeek、通义千问等）处理你的输入，再返回结果给你。
-2. 上述第三方服务可能接触到你主动输入的内容；我们仅调用其 API 生成回复，不会把内容用于对外共享或训练公开模型。
-3. 第三方服务商的网络、算力与安全由其自身负责，我们会在能力范围内做好内容过滤与标识。
-4. AI 生成内容仅供参考，不构成专业（医疗、法律、金融等）建议，重要决策请以官方或专业人士信息为准。`;
 
 interface CustomSettings {
   replyStyle: string;
@@ -665,6 +650,13 @@ function MinePage() {
 
       {/* 其他入口 */}
       <View className={styles.settingCard}>
+        <View className={styles.settingRow} onClick={() => Taro.navigateTo({ url: '/pages/learn/index' })}>
+          <Text className={styles.settingLabel}>{t('mine.learn')}</Text>
+          <View className={styles.settingValue}>
+            <Text>{t('mine.learnDesc')}</Text>
+            <Text className={styles.entryArrow}>›</Text>
+          </View>
+        </View>
         <View className={styles.settingRow} onClick={() => Taro.navigateTo({ url: '/pages/shopping/index' })}>
           <Text className={styles.settingLabel}>{t('mine.shopping')}</Text>
           <View className={styles.settingValue}>

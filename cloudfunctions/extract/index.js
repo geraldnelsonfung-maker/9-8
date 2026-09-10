@@ -77,6 +77,8 @@ exports.main = async (event) => {
   if (images.length > 0) {
     llmOptions.model = process.env.LLM_VISION_MODEL || 'glm-4v-flash';
     llmOptions.base = process.env.LLM_VISION_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4';
+    // 视觉模型是独立供应商（默认智谱），必须用独立 key；未配 LLM_VISION_API_KEY 则回退主力 key（同供应商时才可用）
+    llmOptions.apiKey = process.env.LLM_VISION_API_KEY || process.env.LLM_API_KEY;
     userMessage = [
       ...images.map((b64) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } })),
       {

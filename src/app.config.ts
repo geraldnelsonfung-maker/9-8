@@ -16,7 +16,9 @@ export default defineAppConfig({
     'pages/mine/index',
     'pages/search/index',
     'pages/history/index',
-    'pages/shopping/index'
+    'pages/shopping/index',
+    'pages/learn/index',
+    'pages/learnDetail/index'
   ],
   window: {
     backgroundTextStyle: 'light',
@@ -39,14 +41,14 @@ export default defineAppConfig({
       {
         pagePath: 'pages/inbox/index',
         text: '收件箱',
-        iconPath: 'assets/tabbar/inbox.svg',
-        selectedIconPath: 'assets/tabbar/inbox-selected.svg'
+        iconPath: 'assets/tabbar-png/inbox.png',
+        selectedIconPath: 'assets/tabbar-png/inbox-selected.png'
       },
       {
         pagePath: 'pages/library/index',
         text: '热点',
-        iconPath: 'assets/tabbar/library.svg',
-        selectedIconPath: 'assets/tabbar/library-selected.svg'
+        iconPath: 'assets/tabbar-png/library.png',
+        selectedIconPath: 'assets/tabbar-png/library-selected.png'
       },
       {
         pagePath: 'pages/calendar/index',

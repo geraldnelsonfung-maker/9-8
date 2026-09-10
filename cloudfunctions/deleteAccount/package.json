@@ -1,0 +1,9 @@
+{
+  "name": "deleteAccount",
+  "version": "1.0.0",
+  "description": "注销账号：清空用户全部云端数据（合规 F18）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

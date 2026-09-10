@@ -1,0 +1,218 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding: $spacing-md 0 80rpx;
+}
+
+/* 语种切换 */
+.langBar {
+  display: flex;
+  gap: $spacing-sm;
+  padding: $spacing-sm $page-padding;
+}
+
+.langTab {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx 28rpx;
+  border-radius: $radius-round;
+  border: 2rpx solid $color-border;
+  background: $color-bg-card;
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  transition: all $transition-fast;
+}
+
+.langTabActive {
+  font-weight: $font-weight-semibold;
+  background: $color-bg-card;
+}
+
+.langDot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: $radius-round;
+}
+
+/* 打卡统计卡 */
+.statsCard {
+  display: flex;
+  align-items: center;
+  margin: $spacing-sm $page-padding 0;
+  padding: $spacing-lg 0;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+}
+
+.statItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+}
+
+.statNum {
+  font-size: 44rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  line-height: 1.1;
+}
+
+.statNumOn {
+  color: var(--brand, $color-secondary);
+}
+
+.statUnit {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  font-weight: $font-weight-normal;
+}
+
+.statLabel {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.statDivider {
+  width: 1rpx;
+  height: 56rpx;
+  background: $color-bg-page;
+}
+
+/* 总进度条 */
+.progressTrack {
+  height: 10rpx;
+  margin: $spacing-md $page-padding 0;
+  border-radius: $radius-round;
+  background: $color-bg-card;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: $radius-round;
+  transition: width $transition-base;
+}
+
+.progressHint {
+  display: block;
+  margin: $spacing-xs $page-padding 0;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+/* 分级课程 */
+.levelBlock {
+  margin-top: $spacing-lg;
+}
+
+.levelHeader {
+  display: flex;
+  align-items: baseline;
+  gap: $spacing-sm;
+  padding: 0 $page-padding $spacing-sm;
+}
+
+.levelName {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+}
+
+.levelDesc {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  @include text-ellipsis;
+}
+
+.courseCard {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  margin: 0 $page-padding $spacing-sm;
+  padding: $spacing-lg;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.92;
+    transform: scale(0.99);
+  }
+}
+
+.courseMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.courseTitleRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.courseTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.doneBadge {
+  padding: 2rpx 12rpx;
+  border-radius: $radius-round;
+  background: var(--brand-soft, rgba(0, 0, 0, 0.05));
+  color: var(--brand, $color-secondary);
+  font-size: $font-size-xs;
+  flex-shrink: 0;
+}
+
+.courseTheme {
+  display: block;
+  margin-top: 4rpx;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.courseBar {
+  height: 8rpx;
+  margin-top: $spacing-sm;
+  border-radius: $radius-round;
+  background: $color-bg-page;
+  overflow: hidden;
+}
+
+.courseBarFill {
+  height: 100%;
+  border-radius: $radius-round;
+  transition: width $transition-base;
+}
+
+.courseStat {
+  display: block;
+  margin-top: 4rpx;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.courseArrow {
+  font-size: 40rpx;
+  color: $color-text-disabled;
+  flex-shrink: 0;
+}
+
+/* 页脚 */
+.footer {
+  margin-top: $spacing-xl;
+  text-align: center;
+}
+
+.footerText {
+  font-size: $font-size-xs;
+  color: $color-text-disabled;
+}

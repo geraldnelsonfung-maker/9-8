@@ -284,5 +284,25 @@ exports.main = async (event) => {
 
   // 工作助手/深思/联网比价/批量排班回复较长，放宽截断；普通对话维持 120 字
   const maxLen = deep || mode === 'work' || result.action === 'shopping' || result.action === 'batch' ? 500 : 120;
-  return { reply: String(result.reply).slice(0, maxLen), action: result.action || 'chat' };
+  let replyText = String(result.reply).slice(0, maxLen);
+
+  // AI 发图：热点/资讯类查询附带真实资讯封面图（webSearch RSS 抽取，1h 缓存零成本；失败不影响回复）
+  let image = undefined;
+  if (/热点|新闻|资讯|热搜/.test(String(message))) {
+    try {
+      const hs = await cloud.callFunction({ name: 'webSearch', data: { action: 'hotspot' } });
+      const payload = hs && hs.result;
+      const first = payload && payload.code === 0 && Array.isArray(payload.data) ? payload.data[0] : null;
+      if (first && first.image) {
+        image = first.image;
+        if (!replyText.includes(first.title)) {
+          replyText = `${replyText}\n📰 ${first.title}（来源：${first.source}）`;
+        }
+      }
+    } catch (err) {
+      console.warn('[chat] news image attach failed:', err && (err.errMsg || err.message));
+    }
+  }
+
+  return { reply: replyText, action: result.action || 'chat', image };
 };

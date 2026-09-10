@@ -1,0 +1,9 @@
+{
+  "name": "shopping",
+  "version": "1.0.0",
+  "description": "购物清单真机 CRUD（openid 隔离）：添加/勾购/删除/记比价",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

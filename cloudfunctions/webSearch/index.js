@@ -83,6 +83,20 @@ function pickLink(block) {
   return href ? href[1] : '';
 }
 
+/** 抽取条目真实配图：media:content / media:thumbnail / enclosure(image) / 正文首个 <img>；无则 undefined */
+function pickImage(block) {
+  const candidates = [
+    (block.match(/<media:content[^>]*url=["']([^"']+)["']/i) || [])[1],
+    (block.match(/<media:thumbnail[^>]*url=["']([^"']+)["']/i) || [])[1],
+    (block.match(/<enclosure[^>]*type=["'][^"']*image[^"']*["'][^>]*url=["']([^"']+)["']/i) || [])[1],
+    (block.match(/<enclosure[^>]*url=["']([^"']+)["'][^>]*type=["'][^"']*image/i) || [])[1],
+    (block.match(/<img[^>]*src=["'](https?:\/\/[^"']+)["']/i) || [])[1]
+  ];
+  const url = candidates.find(Boolean);
+  if (!url || !/^https?:\/\//i.test(url)) return undefined;
+  return url.replace(/&amp;/g, '&');
+}
+
 /** 去 HTML 标签与实体，压成单行摘要 */
 function stripHtml(s) {
   return String(s || '')
@@ -104,12 +118,13 @@ function shortHash(s) {
   return h.toString(36);
 }
 
-/** 解析 RSS2.0 / Atom 文本 → 中间条目 [{ title, link, summary, ts }] */
+/** 解析 RSS2.0 / Atom 文本 → 中间条目 [{ title, link, image, summary, ts }] */
 function parseFeed(xml, sourceName, tag) {
   const blocks = xml.match(/<item[\s\S]*?<\/item>/gi) || xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
   return blocks.slice(0, 12).map((b) => {
     const title = stripHtml(pickTag(b, 'title'));
     const link = pickLink(b);
+    const image = pickImage(b);
     let summary = stripHtml(
       pickTag(b, 'description') || pickTag(b, 'summary') || pickTag(b, 'content')
     );
@@ -117,7 +132,7 @@ function parseFeed(xml, sourceName, tag) {
     if (title && summary.startsWith(title)) summary = summary.slice(title.length).trim();
     const dateStr = pickTag(b, 'pubDate') || pickTag(b, 'updated') || pickTag(b, 'published');
     const ts = dateStr ? new Date(dateStr).getTime() : 0;
-    return { title, link, summary: summary.slice(0, 120), ts, sourceName, tag };
+    return { title, link, image, summary: summary.slice(0, 120), ts, sourceName, tag };
   });
 }
 
@@ -129,9 +144,101 @@ function toNews(it) {
     summary: it.summary,
     source: it.sourceName,
     url: it.link || undefined,
+    image: it.image || undefined,
     tags: it.tag ? [it.tag] : [],
     createTime: it.ts ? new Date(it.ts).toISOString() : new Date().toISOString()
   };
+}
+
+/* ---------------- F29 全网资讯搜索（Bing News RSS 主通道 + LLM 联网兜底） ---------------- */
+
+/** LLM 联网搜索兜底（通义 DashScope enable_search，需 LLM_WEB_API_KEY）；未配置/失败返回 [] */
+async function searchNewsByLLM(keyword) {
+  const apiKey = process.env.LLM_WEB_API_KEY;
+  if (!apiKey) return [];
+  const base = process.env.LLM_WEB_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const model = process.env.LLM_WEB_MODEL || 'qwen-plus';
+  const body = JSON.stringify({
+    model,
+    temperature: 0.4,
+    enable_search: true, // 通义 Qwen OpenAI 兼容模式开启联网检索
+    response_format: { type: 'json_object' },
+    messages: [
+      {
+        role: 'system',
+        content:
+          '你是新闻检索助手。基于联网搜索结果查找与关键词相关的近期新闻，输出 JSON：{"items":[{"title":"标题","summary":"一句话摘要(60字内)","source":"媒体名","url":"原文链接，没有则空字符串"}]}，最多 6 条，禁止编造来源和链接。'
+      },
+      { role: 'user', content: `今天是 ${new Date().toISOString().slice(0, 10)}。关键词：${keyword}` }
+    ]
+  });
+  try {
+    const endpoint = new URL('/chat/completions', base);
+    const raw = await new Promise((resolve, reject) => {
+      const req = https.request(
+        endpoint,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Length': Buffer.byteLength(body)
+          },
+          timeout: 20000
+        },
+        (res) => {
+          let resp = '';
+          res.on('data', (chunk) => (resp += chunk));
+          res.on('end', () => {
+            try {
+              const data = JSON.parse(resp);
+              if (res.statusCode !== 200) return reject(new Error(`LLM ${res.statusCode}`));
+              resolve(data.choices[0].message.content);
+            } catch (err) {
+              reject(err);
+            }
+          });
+        }
+      );
+      req.on('error', reject);
+      req.on('timeout', () => req.destroy(new Error('LLM search timeout')));
+      req.write(body);
+      req.end();
+    });
+    const parsed = safeParse(raw);
+    const list = (parsed && parsed.items) || (Array.isArray(parsed) ? parsed : []);
+    return list
+      .filter((it) => it && it.title)
+      .slice(0, 10)
+      .map((it, i) => ({
+        id: `llm-${shortHash(`${it.url || ''}${it.title}${i}`)}`,
+        title: String(it.title).slice(0, 80),
+        summary: String(it.summary || '').slice(0, 120),
+        source: String(it.source || '网络资讯').slice(0, 20),
+        url: it.url || undefined,
+        image: undefined,
+        tags: ['搜索'],
+        createTime: new Date().toISOString()
+      }));
+  } catch (err) {
+    console.warn('[webSearch] searchNews llm failed:', err && err.message);
+    return [];
+  }
+}
+
+/** 全网新闻检索瀑布：① Bing News RSS（免费直连）→ ② LLM 联网兜底；全部失败返回 []，不阻塞 */
+async function searchNewsOnline(keyword) {
+  const kw = String(keyword || '').trim().slice(0, 30);
+  if (!kw) return [];
+  const url = `https://cn.bing.com/news/search?q=${encodeURIComponent(kw)}&format=RSS&setmkt=zh-CN`;
+  try {
+    const xml = await fetchText(url);
+    const items = parseFeed(xml, '必应新闻', '搜索').filter((it) => it.title);
+    if (items.length) return items.slice(0, 10).map(toNews);
+  } catch (err) {
+    console.warn('[webSearch] searchNews bing failed:', err && err.message);
+  }
+  return searchNewsByLLM(kw);
 }
 
 /** 并发抓取全部源（单源失败不影响整体），按时间倒序取前 10 */
@@ -370,6 +477,14 @@ exports.main = async (event) => {
   try {
     if (action === 'hotspot') {
       const { items } = await getHotspotNews();
+      return { code: 0, message: 'ok', data: items };
+    }
+
+    if (action === 'searchNews') {
+      // F29 全网搜索：Bing News RSS 按关键词全网检索，结果带来源标注（合规）
+      const kw = String((event && event.keyword) || '').trim();
+      if (!kw) return { code: -1, message: 'keyword required', data: null };
+      const items = await searchNewsOnline(kw);
       return { code: 0, message: 'ok', data: items };
     }
 
