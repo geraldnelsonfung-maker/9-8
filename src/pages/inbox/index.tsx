@@ -153,11 +153,9 @@ function InboxPage() {
     for (const src of images) {
       if (isWeapp) {
         try {
-          const res = await Taro.getFileSystemManager().readFile({
-            filePath: src,
-            encoding: 'base64'
-          });
-          out.push(String(res.data));
+          // readFile 异步版在 Taro 类型里返回 void，改用同步版（返回 string | ArrayBuffer）
+          const data = Taro.getFileSystemManager().readFileSync(src, 'base64');
+          out.push(String(data));
         } catch (err) {
           console.warn('[InboxPage] read image failed:', err);
         }

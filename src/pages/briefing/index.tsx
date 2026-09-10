@@ -162,6 +162,8 @@ function BriefingPage() {
       return;
     }
     try {
+      // Taro 类型把仅支付宝的 entityIds 标为必填（weapp 运行时只需 tmplIds），@ts-expect-error 屏蔽
+      // @ts-expect-error TS2345: Taro 类型定义缺陷
       const res = await Taro.requestSubscribeMessage({ tmplIds: [SUBSCRIBE_TEMPLATE_ID] });
       console.info('[BriefingPage] subscribe result:', res[SUBSCRIBE_TEMPLATE_ID]);
       if (res[SUBSCRIBE_TEMPLATE_ID] === 'accept') {

@@ -78,13 +78,15 @@ function ShoppingPage() {
   const addPrice = (id: string) => {
     const item = list.find((it) => it.id === id);
     if (!item) return;
+    // 微信基础库 2.17.1+ 支持 showModal editable，Taro 类型定义滞后，断言绕过
     Taro.showModal({
       title: `给「${item.name}」记价格`,
       editable: true,
       placeholderText: '例：京东 2599',
       success: async (res) => {
-        if (!res.content) return;
-        const m = res.content.match(/([\u4e00-\u9fa5A-Za-z]+)\s*([\d.,]+)/);
+        const input = (res as unknown as { content?: string }).content;
+        if (!input) return;
+        const m = input.match(/([一-龥A-Za-z]+)\s*([\d.,]+)/);
         if (!m) {
           Taro.showToast({ title: '格式：平台 价格', icon: 'none' });
           return;
@@ -97,7 +99,7 @@ function ShoppingPage() {
           Taro.showToast({ title: '已记录比价', icon: 'success' });
         }
       }
-    });
+    } as unknown as Taro.showModal.Option);
   };
 
   const summary = useMemo(() => {
