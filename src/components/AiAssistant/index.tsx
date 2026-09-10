@@ -141,9 +141,17 @@ function AiAssistant({ context = '', activeHint, offset = 0 }: AiAssistantProps)
   } | null>(null);
   const lastDragEndRef = useRef(0);
 
+  /** 取 fab 的 DOM 元素：H5 端 Taro 不转发 ref，改用稳定 id 查询 */
+  const getFabEl = (): HTMLElement | null => {
+    if (isH5 && typeof document !== 'undefined') {
+      return document.getElementById('ai-fab');
+    }
+    return (fabRef.current as HTMLElement | null) ?? null;
+  };
+
   const beginDrag = useCallback(
     (x: number, y: number) => {
-      const rect = typeof fabRef.current?.getBoundingClientRect === 'function' ? fabRef.current.getBoundingClientRect() : null;
+      const rect = getFabEl()?.getBoundingClientRect?.() ?? null;
       // base 取当前实际位置：首次拖动时读 fab 的视口坐标，之后以 fabPos 为基准
       const base = fabPos ?? { x: rect?.left ?? 0, y: rect?.top ?? 0 };
       dragState.current = {
@@ -202,12 +210,7 @@ function AiAssistant({ context = '', activeHint, offset = 0 }: AiAssistantProps)
       move/up 挂 window，鼠标/手指移出球体也能继续拖动 */
   useEffect(() => {
     if (!isH5 || typeof window === 'undefined') return;
-    const el = fabRef.current as
-      | (Record<string, unknown> & {
-          addEventListener?: (type: string, fn: EventListenerOrEventListenerObject) => void;
-          removeEventListener?: (type: string, fn: EventListenerOrEventListenerObject) => void;
-        })
-      | null;
+    const el = getFabEl();
     if (!el || typeof el.addEventListener !== 'function') return;
 
     const startWith = (x: number, y: number) => {
@@ -272,7 +275,7 @@ function AiAssistant({ context = '', activeHint, offset = 0 }: AiAssistantProps)
 
   /** 拖动事件：H5 由上方 useEffect 原生绑定（Taro 不转发鼠标事件），weapp 走 touch props */
   const fabDragProps = isH5
-    ? { ref: fabRef }
+    ? { id: 'ai-fab' }
     : { ref: fabRef, onTouchStart: handleFabTouchStart, onTouchMove: handleFabTouchMove, onTouchEnd: finishDrag };
 
   return (
@@ -286,7 +289,7 @@ function AiAssistant({ context = '', activeHint, offset = 0 }: AiAssistantProps)
         </View>
       ) : null}
 
-      <View className={styles.fab} onClick={handleFabTap} {...fabDragProps}>
+      <View id='ai-fab' className={styles.fab} onClick={handleFabTap} {...fabDragProps}>
         <Text className={styles.fabIcon}>🤖</Text>
       </View>
 

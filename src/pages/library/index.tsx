@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, Input } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import dayjs from 'dayjs';
+import classnames from 'classnames';
 import TagChip from '@/components/TagChip';
 import EmptyState from '@/components/EmptyState';
 import { apiGetLibrary, apiGetHotspot } from '@/services/api';
@@ -42,6 +43,7 @@ function LibraryPage() {
   const [activeTag, setActiveTag] = useState('全部');
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(true);
+  const [feedbackMap, setFeedbackMap] = useState<Record<string, 'up' | 'down'>>(() => readNewsFeedback());
   const { refreshUsage } = useUserStore();
 
   useEffect(() => {
@@ -98,6 +100,27 @@ function LibraryPage() {
     Taro.showToast({ title: `来源：${item.source}`, icon: 'none', duration: 1500 });
   };
 
+  /** 资讯反馈（F22）：👍 有用 / 👎 不感兴趣；再点一次取消；本地持久化 + 云端落库 */
+  const handleNewsFeedback = (item: HotspotNews, value: 'up' | 'down') => {
+    const current = feedbackMap[item.id];
+    const next = current === value ? undefined : value;
+    const nextMap = { ...feedbackMap };
+    if (next) nextMap[item.id] = next;
+    else delete nextMap[item.id];
+    setFeedbackMap(nextMap);
+    try {
+      Taro.setStorageSync(NEWS_FEEDBACK_KEY, nextMap);
+    } catch (err) {
+      console.warn('[LibraryPage] persist newsFeedback failed:', err);
+    }
+    if (next) {
+      logActivity(next === 'up' ? '👍' : '👎', `资讯反馈：${item.title.slice(0, 14)}`);
+      Taro.showToast({ title: t('library.feedbackSaved'), icon: 'none', duration: 1200 });
+      // 云端落库（真机生效；取消反馈只改本地，云端按最新一条聚合）
+      apiNewsFeedback(item.id, next).catch(() => {});
+    }
+  };
+
   return (
     <View className={styles.page}>
       <View className={styles.searchBar}>
@@ -123,16 +146,33 @@ function LibraryPage() {
             <Text className={styles.sectionBarTitle}>{t('library.hotTitle')}</Text>
             <Text className={styles.sectionBarHint}>{t('library.hotHint')}</Text>
           </View>
-          {newsFiltered.map((item) => (
-            <View key={item.id} className={styles.newsCard} onClick={() => handleNewsTap(item)}>
-              <Text className={styles.newsTitle}>{item.title}</Text>
-              <Text className={styles.newsSummary}>{item.summary}</Text>
-              <View className={styles.newsMeta}>
-                <Text className={styles.newsSource}>来源 · {item.source}</Text>
-                <Text className={styles.newsTime}>{fromNow(item.createTime)}</Text>
+          {newsFiltered.map((item) => {
+            const fb = feedbackMap[item.id];
+            return (
+              <View key={item.id} className={styles.newsCard} onClick={() => handleNewsTap(item)}>
+                <Text className={styles.newsTitle}>{item.title}</Text>
+                <Text className={styles.newsSummary}>{item.summary}</Text>
+                <View className={styles.newsMeta}>
+                  <Text className={styles.newsSource}>来源 · {item.source}</Text>
+                  <Text className={styles.newsTime}>{fromNow(item.createTime)}</Text>
+                </View>
+                <View className={styles.feedbackRow} onClick={(e) => e.stopPropagation()}>
+                  <Text
+                    className={classnames(styles.feedbackBtn, fb === 'up' && styles.feedbackActive)}
+                    onClick={() => handleNewsFeedback(item, 'up')}
+                  >
+                    👍 {t('library.feedbackUp')}
+                  </Text>
+                  <Text
+                    className={classnames(styles.feedbackBtn, fb === 'down' && styles.feedbackActive)}
+                    onClick={() => handleNewsFeedback(item, 'down')}
+                  >
+                    👎 {t('library.feedbackDown')}
+                  </Text>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       ) : null}
 

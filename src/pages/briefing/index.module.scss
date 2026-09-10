@@ -37,6 +37,44 @@
   }
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  flex-shrink: 0;
+}
+
+/* F20 音频晨报：🔊 播报 / ⏹ 停止 */
+.audioButton {
+  @include button-reset;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: $radius-round;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: $shadow-card;
+  font-size: 32rpx;
+  transition: all $transition-fast;
+
+  &:active {
+    transform: scale(0.92);
+  }
+}
+
+.audioButtonActive {
+  background: var(--brand, $color-secondary);
+  animation: audio-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes audio-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--brand-soft, rgba(0, 0, 0, 0.08));
+  }
+  50% {
+    box-shadow: 0 0 0 10rpx transparent;
+  }
+}
+
 .greeting {
   font-size: $font-size-xxl;
   font-weight: $font-weight-semibold;
@@ -64,6 +102,29 @@
   color: $color-gold;
   background: rgba(247, 186, 30, 0.15);
   border-radius: $radius-xs;
+}
+
+/* F21 晨报自适应横幅：爆满前置 / 次日行程 / 高优待办点名 */
+.adaptiveBanner {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+  margin: 0 $page-padding $spacing-md;
+  padding: $spacing-sm $spacing-md;
+  background: var(--brand-soft, rgba(0, 0, 0, 0.04));
+  border-radius: $radius-md;
+}
+
+.adaptiveIcon {
+  font-size: 26rpx;
+  flex-shrink: 0;
+}
+
+.adaptiveText {
+  flex: 1;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
 }
 
 .section {
@@ -215,6 +276,21 @@
   color: $color-text-secondary;
   line-height: $line-height-loose;
   @include text-ellipsis-multi(2);
+}
+
+/* 今日情报：来源标注与降级/AI 说明（合规要求来源可见） */
+.digestSource {
+  display: block;
+  margin-top: 4rpx;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.intelNote {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $font-size-xs;
+  color: #999;
 }
 
 .aiGeneratedTag {

@@ -17,6 +17,28 @@ function greetingByHour(hour) {
   return '晚上好，为明天做好准备';
 }
 
+/**
+ * 订阅用户追加「今日情报」（webSearch 云函数：天气+偏好RSS+LLM摘要，订阅专属）。
+ * 懒加载策略：不在定时触发器里调 LLM（逐用户串行会超 cron 时长），而是用户首次
+ * 打开晨报时补充并落库，之后直接随缓存晨报返回；任何失败降级为 null，不阻塞晨报。
+ */
+async function attachIntel(openid) {
+  try {
+    const userRes = await db.collection('users').where({ openid }).limit(1).get();
+    const user = userRes.data[0];
+    const subscribed = !!(user && user.subscribed && user.expiredAt && new Date(user.expiredAt) > new Date());
+    if (!subscribed) return null;
+    const res = await cloud.callFunction({ name: 'webSearch', data: { action: 'briefing', openid } });
+    const payload = res && res.result;
+    if (payload && payload.code === 0 && payload.data) return payload.data;
+    console.warn('[getBriefing] attachIntel bad payload:', payload && payload.message);
+    return null;
+  } catch (err) {
+    console.warn('[getBriefing] attachIntel failed:', err && (err.errMsg || err.message));
+    return null;
+  }
+}
+
 /** 聚合某用户的晨报数据 */
 async function aggregate(openid) {
   const eventsRes = await db
@@ -39,13 +61,21 @@ async function aggregate(openid) {
     .get();
 
   const hour = new Date().getHours();
+  const adaptive = computeAdaptive(eventsRes.data, todosRes.data);
+
+  // 自适应开场（F21）：爆满日强调日程前置；有高优待办先点名
+  let greeting = greetingByHour(hour);
+  if (adaptive.busyDay) greeting = '今天日程很满，先看日程再逐项推进';
+  else if (adaptive.focusTodo) greeting = `先办「${adaptive.focusTodo}」，其他从容推进`;
+
   return {
     date: todayStr(),
-    greeting: greetingByHour(hour),
+    greeting,
     events: eventsRes.data,
     todos: todosRes.data,
     digest: itemsRes.data.map((it) => `《${it.title}》：${it.summary}`),
-    read: false
+    read: false,
+    adaptive
   };
 }
 
@@ -60,10 +90,21 @@ exports.main = async (event) => {
     .limit(1)
     .get();
   if (existing.data.length > 0) {
-    return existing.data[0];
+    const doc = existing.data[0];
+    // 晨报已有但缺今日情报（如由定时器生成）：首次打开时懒加载补充
+    if (!doc.intel) {
+      const intel = await attachIntel(OPENID, doc.adaptive && doc.adaptive.tripCity);
+      if (intel) {
+        doc.intel = intel;
+        await db.collection('briefings').doc(doc._id).update({ data: { intel } }).catch(() => {});
+      }
+    }
+    return doc;
   }
 
   const briefing = await aggregate(OPENID);
+  const intel = await attachIntel(OPENID, briefing.adaptive && briefing.adaptive.tripCity);
+  if (intel) briefing.intel = intel;
   await db.collection('briefings').add({ data: { openid: OPENID, ...briefing } });
   return briefing;
 };

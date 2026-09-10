@@ -1,3 +1,4 @@
+import Taro from '@tarojs/taro';
 import { callFunction } from './cloud';
 import type {
   Briefing,
@@ -60,6 +61,30 @@ export function apiGetLibrary(): Promise<CollectionItem[]> {
 /** 今日热点资讯（v2.0，来源强制标注；云函数就绪前双端走本地 mock） */
 export function apiGetHotspot(): Promise<HotspotNews[]> {
   return callFunction<HotspotNews[]>('getHotspot');
+}
+
+/** 资讯反馈（F22）：记录 👍/👎，驱动内容瘦身；本地持久化 + 真机走云函数 */
+export function apiNewsFeedback(id: string, feedback: 'up' | 'down'): Promise<{ id: string; feedback: 'up' | 'down' }> {
+  // 本地持久化（双端即时生效）
+  try {
+    const raw = Taro.getStorageSync('newsFeedback') || {};
+    raw[id] = feedback;
+    Taro.setStorageSync('newsFeedback', raw);
+  } catch (err) {
+    console.warn('[api] newsFeedback persist failed:', err);
+  }
+  // H5 预览无 webSearch 云通道（callFunction 会路由到不存在的 mock），反馈留本地
+  if (process.env.TARO_ENV !== 'weapp') {
+    return Promise.resolve({ id, feedback });
+  }
+  // 真机落库 newsFeedback 集合；失败不阻塞本地标记
+  return Taro.cloud
+    .callFunction({ name: 'webSearch', data: { action: 'feedback', id, feedback } })
+    .then(() => ({ id, feedback }))
+    .catch((err) => {
+      console.warn('[api] newsFeedback cloud sync failed:', err);
+      return { id, feedback };
+    });
 }
 
 /** 更新习惯设置 */

@@ -42,6 +42,20 @@ export interface CollectionItem {
   createTime: string;
 }
 
+/** 今日情报（F15，订阅专属）：天气 + 偏好资讯，LLM 摘要，失败降级 */
+export interface BriefingIntel {
+  /** 是否订阅用户（非订阅时 intelItems 为空） */
+  subscribed: boolean;
+  /** 今日限额已满（10 次/日），此时 intelItems 为原始资讯降级 */
+  limited?: boolean;
+  /** 天气一句话（和风天气未配置/失败时为 null） */
+  weather: { text: string; updateTime: string } | null;
+  /** 情报条目，每条标注来源（合规要求） */
+  intelItems: Array<{ text: string; source: string }>;
+  /** true = 未经 LLM 提炼的降级内容（原始资讯或空） */
+  degraded?: boolean;
+}
+
 /** 晨报 */
 export interface Briefing {
   /** 'YYYY-MM-DD' */
@@ -51,6 +65,10 @@ export interface Briefing {
   todos: TodoItem[];
   /** 昨日收藏精选摘要 */
   digest: string[];
+  /** 今日情报（订阅专属；未订阅/生成失败为 null 或缺失，兼容旧数据） */
+  intel?: BriefingIntel | null;
+  /** 自适应信号（F21；旧数据缺失时前端可按 events/todos 现算） */
+  adaptive?: BriefingAdaptive;
   /** 已读标记 */
   read: boolean;
 }

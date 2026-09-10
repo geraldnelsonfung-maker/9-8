@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, Input, Button } from '@tarojs/components';
-import Taro, { usePullDownRefresh } from '@tarojs/taro';
+import Taro, { usePullDownRefresh, useDidHide } from '@tarojs/taro';
 import dayjs from 'dayjs';
 import classnames from 'classnames';
 import VoiceButton, { VoiceResult } from '@/components/VoiceButton';
@@ -10,6 +10,8 @@ import { useUserStore } from '@/store/user';
 import { brandVars, useThemeStore } from '@/store/theme';
 import { getGreeting, formatEventTime } from '@/utils/date';
 import { logActivity } from '@/utils/activityLog';
+import { computeAdaptive } from '@/utils/adaptive';
+import { splitTtsChunks, startSpeak, stopSpeak } from '@/utils/tts';
 import type { Briefing, ChatMessage } from '@/types';
 import { useT, useLanguageStore } from '@/store/language';
 import type { LangKey } from '@/store/language';
@@ -47,6 +49,7 @@ function BriefingPage() {
   const [sending, setSending] = useState(false);
   const [deepMode, setDeepMode] = useState(false);
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const { profile, usage, init, refreshUsage } = useUserStore();
   const mockIndexRef = useRef(0);
   const msgIdRef = useRef(0);
@@ -69,6 +72,12 @@ function BriefingPage() {
   usePullDownRefresh(async () => {
     await Promise.all([loadBriefing(), refreshUsage()]);
     Taro.stopPullDownRefresh();
+  });
+
+  // 离开页面即停播（F20：全局单播放通道，stopSpeak 幂等）
+  useDidHide(() => {
+    stopSpeak();
+    setIsSpeaking(false);
   });
 
   const pushMessage = (
@@ -144,13 +153,17 @@ function BriefingPage() {
   const handleVoiceResult = (result: VoiceResult) => {
     if (!result.confirmed) return;
     if (!checkVoiceQuota()) return;
-    if (isWeapp && result.tempFilePath) {
-      // TODO：发布版接入微信同声传译插件完成 ASR 转写后，把 transcript 传给 askAssistant
-      console.info('[BriefingPage] voice recorded:', { duration: result.duration, tempFilePath: result.tempFilePath });
-      Taro.showToast({ title: t('briefing.voiceTodo'), icon: 'none', duration: 2000 });
+    if (result.transcript) {
+      // 有转写文本：微信端同声传译插件识别成功（H5 端为 mock 转写），直接进对话链路
+      askAssistant(result.transcript, 'voice');
       return;
     }
-    // 非微信端：模拟转写结果
+    if (isWeapp) {
+      // 无转写的微信端结果 = 同声传译插件未配置的降级路径（纯录音）
+      Taro.showToast({ title: t('briefing.voiceNoPlugin'), icon: 'none', duration: 2000 });
+      return;
+    }
+    // 非微信端兜底：模拟转写结果
     const transcript = MOCK_TRANSCRIPTS[mockIndexRef.current % MOCK_TRANSCRIPTS.length];
     mockIndexRef.current += 1;
     askAssistant(transcript, 'voice');
@@ -197,6 +210,61 @@ function BriefingPage() {
   ].sort((a, b) => dayjs(a.time).valueOf() - dayjs(b.time).valueOf());
   const hasContent =
     briefing && (todaySchedule.length > 0 || briefing.todos.length > 0 || briefing.digest.length > 0);
+
+  /* ---------------- F21 晨报自适应 ---------------- */
+  // 信号：优先用云端/mock 下发的 adaptive，缺失时前端同口径现算
+  const adaptive = briefing ? briefing.adaptive ?? computeAdaptive(briefing.events, briefing.todos) : null;
+  const busyMinutes = todayEvents.reduce((sum, e) => {
+    const mins = e.endTime ? dayjs(e.endTime).diff(dayjs(e.startTime), 'minute') : 60;
+    return sum + (mins > 0 ? mins : 60);
+  }, 0);
+  const adaptiveBanner = (() => {
+    if (!adaptive) return null;
+    if (adaptive.busyDay) {
+      return t('briefing.adaptiveBusy', { count: todayEvents.length, hours: Math.max(1, Math.round(busyMinutes / 60)) });
+    }
+    if (adaptive.tripCity) return t('briefing.adaptiveTrip', { city: adaptive.tripCity });
+    if (adaptive.focusTodo) return t('briefing.adaptiveFocus', { title: adaptive.focusTodo });
+    return null;
+  })();
+
+  /* ---------------- F20 音频晨报 ---------------- */
+  /** 整份晨报转播报稿：开场点名（自适应）→ 天气 → 日程 → 待办 → 精选，≤3 分钟 */
+  const handleAudioToggle = () => {
+    if (isSpeaking) {
+      stopSpeak();
+      setIsSpeaking(false);
+      return;
+    }
+    if (!briefing) return;
+    const lines: string[] = [briefing.greeting];
+    if (adaptive?.focusTodo) lines.push(`先办「${adaptive.focusTodo}」`);
+    if (briefing.intel?.weather) lines.push(briefing.intel.weather.text);
+    if (todayEvents.length) {
+      lines.push('今日日程');
+      todayEvents.forEach((e) =>
+        lines.push(`${formatEventTime(e.startTime)}，${e.title}${e.location ? `，地点${e.location}` : ''}`)
+      );
+    }
+    const pendingTodos = briefing.todos.filter((td) => !doneIds.has(td.id));
+    if (pendingTodos.length) {
+      lines.push('待办事项');
+      pendingTodos.forEach((td) => lines.push(`${td.dueDate ? `${formatEventTime(td.dueDate)}，` : ''}${td.title}`));
+    }
+    if (briefing.digest.length) {
+      lines.push('昨日收藏精选');
+      briefing.digest.forEach((d) => lines.push(d));
+    }
+    startSpeak(splitTtsChunks(lines.join('。')), {
+      onEnd: () => setIsSpeaking(false),
+      onError: (msg) => {
+        setIsSpeaking(false);
+        Taro.showToast({ title: msg, icon: 'none' });
+      }
+    });
+    setIsSpeaking(true);
+  };
+
   const lastMsgId = messages.length > 0 ? messages[messages.length - 1].id : '';
 
   return (
@@ -215,11 +283,29 @@ function BriefingPage() {
               {profile?.subscribed ? <Text className={styles.badge}>{t('mine.badgeSubscribed')}</Text> : null}
             </View>
           </View>
-          <Button className={styles.searchButton} onClick={handleGoSearch}>
-            🔍
-          </Button>
+          <View className={styles.headerActions}>
+            {hasContent ? (
+              <Button
+                className={classnames(styles.audioButton, isSpeaking && styles.audioButtonActive)}
+                onClick={handleAudioToggle}
+                aria-label={isSpeaking ? t('briefing.audioStop') : t('briefing.audioPlay')}
+              >
+                {isSpeaking ? '⏹' : '🔊'}
+              </Button>
+            ) : null}
+            <Button className={styles.searchButton} onClick={handleGoSearch}>
+              🔍
+            </Button>
+          </View>
         </View>
       </View>
+
+      {hasContent && adaptiveBanner ? (
+        <View className={styles.adaptiveBanner}>
+          <Text className={styles.adaptiveIcon}>⚡</Text>
+          <Text className={styles.adaptiveText}>{adaptiveBanner}</Text>
+        </View>
+      ) : null}
 
       {!hasContent ? (
         <View className={styles.section}>
@@ -307,6 +393,29 @@ function BriefingPage() {
                   <Text className={styles.digestText}>{text}</Text>
                 </View>
               ))}
+            </View>
+          ) : null}
+
+          {briefing?.intel?.intelItems && briefing.intel.intelItems.length > 0 ? (
+            <View className={styles.section}>
+              <View className={styles.sectionHeader}>
+                <Text className={styles.sectionIcon}>🌐</Text>
+                <Text className={styles.sectionTitle}>{t('briefing.sectionIntel')}</Text>
+              </View>
+              {briefing.intel.weather ? (
+                <View className={styles.digestItem}>
+                  <Text className={styles.digestText}>🌤 {briefing.intel.weather.text}</Text>
+                </View>
+              ) : null}
+              {briefing.intel.intelItems.map((item, i) => (
+                <View key={i} className={styles.digestItem}>
+                  <Text className={styles.digestText}>{item.text}</Text>
+                  <Text className={styles.digestSource}>来源：{item.source}</Text>
+                </View>
+              ))}
+              <Text className={styles.intelNote}>
+                {briefing.intel.degraded ? t('briefing.intelRawNote') : t('briefing.aiTag')}
+              </Text>
             </View>
           ) : null}
         </>

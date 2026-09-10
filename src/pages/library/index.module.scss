@@ -126,6 +126,34 @@
   color: $color-text-disabled;
 }
 
+/* F22 资讯反馈：👍/👎 标记行 */
+.feedbackRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-lg;
+  margin-top: $spacing-md;
+  padding-top: $spacing-sm;
+  border-top: 1rpx solid $color-bg-page;
+}
+
+.feedbackBtn {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  padding: 4rpx $spacing-sm;
+  border-radius: $radius-xs;
+  transition: all $transition-fast;
+
+  &:active {
+    transform: scale(0.94);
+  }
+}
+
+.feedbackActive {
+  color: var(--brand, $color-secondary);
+  background: var(--brand-soft, rgba(0, 0, 0, 0.04));
+  font-weight: $font-weight-medium;
+}
+
 .filterBar {
   padding: 0 $page-padding $spacing-md;
   white-space: nowrap;
