@@ -195,7 +195,7 @@ exports.main = async (event) => {
         ? WORK_SYSTEM_PROMPTS[workAction] || WORK_SYSTEM_PROMPTS.summary
         : deep
           ? '你是用户的深度思考伙伴。用户抛出纠结或问题时，帮其拆解：1) 关键矛盾是什么 2) 各选项的利弊 3) 给出一个可执行的下一步。语气克制友好，不空洞打气。输出 JSON：{"reply": "给用户的中文回复(500字内，可分行)", "action": "chat", "targetId": null, "newTime": null}。'
-          : '你是私人晨报助理。基于用户当前日程数据及对话执行指令。输出 JSON：{"reply": "给用户的中文回复(120字内)", "action": "reschedule|done|query|schedule|shopping|chat", "targetId": "事件或待办id或null", "newTime": "YYYY-MM-DD HH:mm或null"}。改期指令且能定位目标时 action=reschedule；完成指令且能定位时 action=done；询问安排时 action=query；闲聊 action=chat。排班（如「帮我安排周五下午开会」）：对照已有日程找空闲时段，给 1 个建议时段和理由，action=schedule 且 newTime=建议时段，不要写库，等用户回复「确认」后再 reschedule。当识别到购物意图（买、对比、哪个划算、值不值、求推荐商品、想买东西、预算内选什么）时，action=shopping：输出一份选购分析——拆解需求与预算、列出 2-4 个主流平台/方案的关键差异（价格、售后、物流、口碑要点）、给出明确结论和下一步。若你需要联网实时查价但无搜索工具，就基于常识给相对对比并明确标注"价格为参考，以平台实时为准"，绝不谎称是实时联网数据。';
+          : '你是私人晨报助理。基于用户当前日程数据及对话执行指令。输出 JSON：{"reply": "给用户的中文回复(120字内)", "action": "reschedule|done|query|schedule|batch|shopping|chat", "targetId": "事件或待办id或null", "newTime": "YYYY-MM-DD HH:mm或null", "newEvents": null}。改期指令且能定位目标时 action=reschedule；完成指令且能定位时 action=done；询问安排时 action=query；闲聊 action=chat。排班（如「帮我安排周五下午开会」）：对照已有日程找空闲时段，给 1 个建议时段和理由，action=schedule 且 newTime=建议时段，不要写库，等用户回复「确认」后再 reschedule。批量/周期排班（如「把周会固定到每周二上午」「下周一站会、周三下午评审、周五复盘」）时 action=batch：newEvents=[{"title":"会议名","startTime":"YYYY-MM-DD HH:mm"}]，周期会议给未来 4 次具体日期，单次批量最多 5 条，直接排入无需确认；reply 里逐条列出排入时间。当识别到购物意图（买、对比、哪个划算、值不值、求推荐商品、想买东西、预算内选什么）时，action=shopping：输出一份选购分析——拆解需求与预算、列出 2-4 个主流平台/方案的关键差异（价格、售后、物流、口碑要点）、给出明确结论和下一步。若你需要联网实时查价但无搜索工具，就基于常识给相对对比并明确标注"价格为参考，以平台实时为准"，绝不谎称是实时联网数据。';
     const raw = await callLLM(
       [
         { role: 'system', content: systemContent },
@@ -260,9 +260,29 @@ exports.main = async (event) => {
     } catch (err) {
       console.warn('[chat] done failed:', err && err.errMsg);
     }
+  } else if (result.action === 'batch' && Array.isArray(result.newEvents) && result.newEvents.length > 0) {
+    // F24 批量/周期排班：LLM 解析出的多条日程一次落库（服务端 add 支持数组批量写入）
+    const docs = result.newEvents
+      .slice(0, 5)
+      .map((e) => ({
+        openid: OPENID,
+        title: String((e && e.title) || '日程').slice(0, 30),
+        startTime: String((e && e.startTime) || ''),
+        status: 'confirmed',
+        source: 'AI 批量排班',
+        createdAt: new Date().toISOString()
+      }))
+      .filter((d) => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(d.startTime));
+    if (docs.length > 0) {
+      try {
+        await db.collection('events').add({ data: docs });
+      } catch (err) {
+        console.warn('[chat] batch schedule failed:', err && err.errMsg);
+      }
+    }
   }
 
-  // 工作助手/深思/联网比价回复较长，放宽截断；普通对话维持 120 字
-  const maxLen = deep || mode === 'work' || result.action === 'shopping' ? 500 : 120;
+  // 工作助手/深思/联网比价/批量排班回复较长，放宽截断；普通对话维持 120 字
+  const maxLen = deep || mode === 'work' || result.action === 'shopping' || result.action === 'batch' ? 500 : 120;
   return { reply: String(result.reply).slice(0, maxLen), action: result.action || 'chat' };
 };

@@ -145,6 +145,12 @@ const zh = {
 
   'calendar.legendSchedule': '日程',
   'calendar.legendTodo': '待办',
+  'calendar.statsTitle': '本月忙闲',
+  'calendar.statsEvents': '场日程',
+  'calendar.statsTodos': '项待办',
+  'calendar.statsBusy': '个忙日',
+  'calendar.statsPeak': '最忙星期',
+  'calendar.statsEmpty': '本月还很轻松',
 
   'search.loading': '加载中…',
   'search.empty': '输入关键词，找回你存过的任何东西',
@@ -300,6 +306,12 @@ const en: Record<keyof typeof zh, string> = {
 
   'calendar.legendSchedule': 'Schedule',
   'calendar.legendTodo': 'To-dos',
+  'calendar.statsTitle': 'This Month',
+  'calendar.statsEvents': 'events',
+  'calendar.statsTodos': 'to-dos',
+  'calendar.statsBusy': 'busy days',
+  'calendar.statsPeak': 'peak day',
+  'calendar.statsEmpty': 'A light month',
 
   'search.loading': 'Loading…',
   'search.empty': 'Search to find anything you saved',

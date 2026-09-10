@@ -144,6 +144,63 @@
   color: $color-text-secondary;
 }
 
+/* F24 忙闲热力：有日程浅染、≥3 场深染 */
+.cellWarm {
+  background: var(--brand-soft, rgba(0, 0, 0, 0.04));
+}
+
+.cellHot {
+  background: var(--brand-soft, rgba(0, 0, 0, 0.04));
+  box-shadow: inset 0 0 0 2rpx var(--brand);
+}
+
+/* F24 忙闲统计条 */
+.statsBar {
+  margin-top: $spacing-md;
+  padding-top: $spacing-md;
+  border-top: 1rpx solid $color-divider;
+}
+
+.statsTitle {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-text-disabled;
+  margin-bottom: $spacing-xs;
+}
+
+.statsRow {
+  display: flex;
+  align-items: stretch;
+  gap: $spacing-sm;
+}
+
+.statItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rpx;
+  padding: $spacing-xs 0;
+  background: $color-bg-page;
+  border-radius: $radius-md;
+}
+
+.statValue {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: var(--brand-deep, $color-text-primary);
+}
+
+.statLabel {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.statsEmpty {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
 .dayHeader {
   display: flex;
   align-items: center;

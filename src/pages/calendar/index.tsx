@@ -9,14 +9,17 @@ import { brandVars, useThemeStore } from '@/store/theme';
 import { formatEventTime } from '@/utils/date';
 import { logActivity } from '@/utils/activityLog';
 import type { Briefing, TodoItem } from '@/types';
-import { useT } from '@/store/language';
+import { useT, useLanguageStore } from '@/store/language';
 import styles from './index.module.scss';
 
 const isWeapp = process.env.TARO_ENV === 'weapp';
 const WEEK_HEAD = ['日', '一', '二', '三', '四', '五', '六'];
+const WEEKDAYS_FULL_ZH = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const WEEKDAYS_FULL_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function CalendarPage() {
   const t = useT();
+  const lang = useLanguageStore((s) => s.lang);
   const { theme } = useThemeStore();
   const [briefing, setBriefing] = useState<Briefing | null>(null);
   const [month, setMonth] = useState(() => dayjs());
@@ -60,6 +63,28 @@ function CalendarPage() {
     });
     return map;
   }, [briefing, doneIds]);
+
+  /** F24 忙闲统计：本月日程/待办/忙日（日程 ≥3 场的天数）与最忙星期 */
+  const monthStats = useMemo(() => {
+    const prefix = month.format('YYYY-MM');
+    const events = (briefing?.events || []).filter((e) => dayjs(e.startTime).format('YYYY-MM') === prefix);
+    const todos = (briefing?.todos || []).filter((td) => td.dueDate && dayjs(td.dueDate).format('YYYY-MM') === prefix);
+    const byDay = new Map<string, number>();
+    events.forEach((e) => {
+      const key = dayjs(e.startTime).format('YYYY-MM-DD');
+      byDay.set(key, (byDay.get(key) || 0) + 1);
+    });
+    const byWeekday = new Array<number>(7).fill(0);
+    let busyDays = 0;
+    byDay.forEach((count, key) => {
+      if (count >= 3) busyDays += 1;
+      byWeekday[dayjs(key).day()] += count;
+    });
+    const peak = byWeekday.indexOf(Math.max(...byWeekday));
+    // 该星期 ≥2 场才展示「最忙星期」，避免日程极少时的误导
+    const peakLabel = byWeekday[peak] >= 2 ? (lang === 'en' ? WEEKDAYS_FULL_EN[peak] : WEEKDAYS_FULL_ZH[peak]) : null;
+    return { events: events.length, todos: todos.length, busyDays, peakLabel };
+  }, [briefing, month, lang]);
 
   const selectedDate = dayjs(selected);
   const dayEvents = (briefing?.events || []).filter((e) => dayjs(e.startTime).format('YYYY-MM-DD') === selected);
@@ -126,6 +151,7 @@ function CalendarPage() {
         key={key}
         className={classnames(
           styles.cell,
+          evtCount >= 3 ? styles.cellHot : evtCount >= 1 && styles.cellWarm,
           !inMonth && styles.dim,
           isSelected && styles.selected,
           isToday && styles.today
@@ -180,6 +206,35 @@ function CalendarPage() {
             <View className={styles.dotTodo} />
             <Text className={styles.legendText}>{t('calendar.legendTodo')}</Text>
           </View>
+        </View>
+
+        {/* F24 忙闲统计：本月日程 / 待办 / 忙日 / 最忙星期 */}
+        <View className={styles.statsBar}>
+          <Text className={styles.statsTitle}>{t('calendar.statsTitle')}</Text>
+          {monthStats.events + monthStats.todos === 0 ? (
+            <Text className={styles.statsEmpty}>{t('calendar.statsEmpty')}</Text>
+          ) : (
+            <View className={styles.statsRow}>
+              <View className={styles.statItem}>
+                <Text className={styles.statValue}>{monthStats.events}</Text>
+                <Text className={styles.statLabel}>{t('calendar.statsEvents')}</Text>
+              </View>
+              <View className={styles.statItem}>
+                <Text className={styles.statValue}>{monthStats.todos}</Text>
+                <Text className={styles.statLabel}>{t('calendar.statsTodos')}</Text>
+              </View>
+              <View className={styles.statItem}>
+                <Text className={styles.statValue}>{monthStats.busyDays}</Text>
+                <Text className={styles.statLabel}>{t('calendar.statsBusy')}</Text>
+              </View>
+              {monthStats.peakLabel ? (
+                <View className={styles.statItem}>
+                  <Text className={styles.statValue}>{monthStats.peakLabel}</Text>
+                  <Text className={styles.statLabel}>{t('calendar.statsPeak')}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
         </View>
       </View>
 
