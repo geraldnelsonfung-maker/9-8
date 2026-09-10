@@ -23,13 +23,16 @@ function isSafePath(relPath) {
 }
 
 // 应用补丁数组，返回 { applied, rejected }
+// 支持两种模式：
+//   1. oldText/newText：精确替换文件中的代码片段（首选，token 省）
+//   2. content：整文件覆盖（兼容旧格式）
 export async function applyPatches(worktreeDir, patches, config) {
   const applied = [];
   const rejected = [];
   for (const patch of patches) {
     const rel = String(patch.file || '').replace(/\\/g, '/');
-    if (!rel || typeof patch.content !== 'string') {
-      rejected.push({ file: rel, why: '补丁缺少 file 或 content 字段' });
+    if (!rel) {
+      rejected.push({ file: rel, why: '补丁缺少 file 字段' });
       continue;
     }
     if (!isSafePath(rel)) {
@@ -47,13 +50,36 @@ export async function applyPatches(worktreeDir, patches, config) {
     } catch {
       /* 新文件 */
     }
-    if (before === patch.content) {
-      // 内容没变化，跳过（避免空提交）
+
+    // 模式 1：oldText/newText 精确替换
+    if (typeof patch.oldText === 'string' && typeof patch.newText === 'string') {
+      if (before === null) {
+        rejected.push({ file: rel, why: 'oldText 模式要求文件已存在' });
+        continue;
+      }
+      if (!before.includes(patch.oldText)) {
+        rejected.push({ file: rel, why: 'oldText 在文件中未找到精确匹配' });
+        continue;
+      }
+      const after = before.replace(patch.oldText, patch.newText);
+      if (after === before) {
+        continue; // 无变化
+      }
+      await writeFile(abs, after, 'utf8');
+      applied.push({ file: rel, reason: patch.reason || '', before, after });
       continue;
     }
-    await mkdir(path.dirname(abs), { recursive: true });
-    await writeFile(abs, patch.content, 'utf8');
-    applied.push({ file: rel, reason: patch.reason || '', before, after: patch.content });
+
+    // 模式 2：content 整文件覆盖（兼容旧格式）
+    if (typeof patch.content === 'string') {
+      if (before === patch.content) continue;
+      await mkdir(path.dirname(abs), { recursive: true });
+      await writeFile(abs, patch.content, 'utf8');
+      applied.push({ file: rel, reason: patch.reason || '', before, after: patch.content });
+      continue;
+    }
+
+    rejected.push({ file: rel, why: '补丁缺少 oldText/newText 或 content 字段' });
   }
   return { applied, rejected };
 }
