@@ -36,7 +36,7 @@ function writeShoppingList(list: MockShoppingItem[]) {
   }
 }
 
-export default function chat(data?: {
+export default async function chat(data?: {
   message?: string;
   action?: string;
   deep?: boolean;
@@ -46,6 +46,38 @@ export default function chat(data?: {
   const msg = (data?.message || '').trim();
   console.info('[mock:chat] message:', msg, 'deep:', data?.deep, 'mode:', data?.mode);
 
+  // 涉及本地 storage 写入/读取的操作类意图不交给 LLM（LLM 不会写本地 storage，会导致假回复）
+  const localIntent =
+    matchBatchSchedule(msg) ||
+    /帮我安排|排一下|帮我约|重新排|排班|确认|就这么排|取消|算了/.test(msg) ||
+    matchShopList(msg) ||
+    matchDailyPlan(msg);
+
+  // 自由对话/深度思考/购物分析 → 本地 LLM 代理（DeepSeek）；代理未启动自动降级 mock
+  if (!localIntent) {
+    try {
+      const res = await fetch('http://localhost:8138/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: msg,
+          deep: data?.deep,
+          mode: data?.mode,
+          workAction: data?.workAction
+        })
+      });
+      if (res.ok) {
+        const result = await res.json();
+        if (result.reply) {
+          return { reply: result.reply, action: result.action || 'chat' };
+        }
+      }
+    } catch (err) {
+      console.info('[mock:chat] 本地 LLM 代理未启动，走 mock 兜底');
+    }
+  }
+
+  // 购物清单等本地操作不走 LLM，直接 mock 处理
   if (data?.mode === 'work') {
     return workAssistant(msg, data.workAction || 'summary');
   }
@@ -124,11 +156,11 @@ function matchBatchSchedule(msg: string): boolean {
   return timed >= 2 && /排|安排|约/.test(msg);
 }
 
-/** 从「把XX固定到每周二上午」提炼会议名：取锚点前文本并剔除口语词 */
+/** 从「把XX固定到每周二上午」提炼会议名：取锚点前文本并剔除口语词（周X 仅在星期位匹配，避免误吞「周会」） */
 function extractBatchTitle(msg: string, anchorIndex: number): string {
   return msg
     .slice(0, anchorIndex)
-    .replace(/帮我?|请|麻烦|把|将|要|想|下?本?这?周[一二三四五六日天]?|每[周个]([一二三四五六日天])?/g, '')
+    .replace(/帮我?|请|麻烦|把|将|要|想|(?:下|本|这)周|周[一二三四五六日天]|每[周个][一二三四五六日天]?/g, '')
     .trim()
     .slice(0, 16);
 }
