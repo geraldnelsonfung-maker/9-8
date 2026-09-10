@@ -1,0 +1,344 @@
+import { create } from 'zustand';
+import Taro from '@tarojs/taro';
+
+export type Lang = 'zh' | 'en';
+
+export const LANG_OPTIONS: Array<{ id: Lang; label: string }> = [
+  { id: 'zh', label: '中文' },
+  { id: 'en', label: 'English' }
+];
+
+const STORAGE_KEY = 'app-lang';
+
+/** 核心界面级文案字典（AI 对话内容/晨报正文由大模型生成，不参与翻译） */
+const zh = {
+  'tab.briefing': '晨报',
+  'tab.inbox': '收件箱',
+  'tab.hotspot': '热点',
+  'tab.calendar': '日历',
+  'tab.mine': '我的',
+
+  'app.title': '私人晨报助理',
+
+  'common.itemCount': '项',
+
+  'mine.avatarEdit': '点头像',
+  'mine.subTitle': '订阅私人晨报助理',
+  'mine.quotaTitle': '本月额度',
+  'mine.quotaVoice': '🎙 语音对话',
+  'mine.quotaFav': '🔖 收藏空间',
+  'mine.recent': '近期动态',
+  'mine.nicknamePlaceholder': '怎么称呼你',
+  'mine.settingGeneral': '通用',
+  'mine.nickname': '称呼',
+  'mine.briefingTime': '晨报推送时间',
+  'mine.briefingRemind': '晨报提醒',
+  'mine.settingAi': 'AI 个性化',
+  'mine.prefTags': '偏好标签',
+  'mine.prefMax': '最多选 5 个',
+  'mine.replyStyle': '回复偏好',
+  'mine.aiMemory': 'AI 记忆',
+  'mine.clear': '清空',
+  'mine.hotNews': '今日热点资讯',
+  'mine.settingAppearance': '外观',
+  'mine.uiLang': '语言',
+  'mine.uiColor': '界面颜色',
+  'mine.uiSize': '界面大小',
+  'mine.uiSizeSmall': '小',
+  'mine.uiSizeStandard': '标准',
+  'mine.uiSizeLarge': '大',
+  'mine.uiSizeXlarge': '特大',
+  'mine.settingAccount': '账号与合规',
+  'mine.terms': '用户协议',
+  'mine.privacy': '隐私政策',
+  'mine.aiNotice': 'AI 服务说明',
+  'mine.privacyManage': '隐私授权管理',
+  'mine.manageAuth': '管理我的授权',
+  'mine.service': '联系客服',
+  'mine.feedback': '在线反馈',
+  'mine.deleteAccount': '注销账号',
+  'mine.deleteData': '删除全部数据',
+  'mine.shopping': '🛒 购物清单',
+  'mine.shoppingDesc': '记想买的东西 · 多平台比价',
+  'mine.privacyNote': '隐私说明：转发的内容仅用于生成你的日程、待办与摘要，存储于境内服务器；数据删除与客服入口见上方设置区。',
+  'mine.docRead': '我已阅读',
+  'mine.badgeSubscribed': '订阅中',
+  'mine.subDesc': '语音晨报不限次畅聊 · 收藏无限量 · 习惯记忆主动调整晨报 · 新功能优先体验',
+  'mine.freeUser': '免费版用户',
+  'mine.earlyBirdBadge': '早鸟会员',
+  'mine.memberBadge': '订阅会员',
+  'mine.priceNote': '/月 起 · 前 500 名锁价（当前：{plan}）',
+  'mine.subscribe': '立即订阅',
+  'mine.subscribing': '下单中…',
+  'mine.unlimited': '不限量',
+  'mine.memoryCount': '{n} 条记忆',
+  'mine.recentEmpty': '暂无动态。与 AI 对话、浏览热点、完成待办都会记录在这里。',
+  'mine.planEarlyBird': '早鸟月付',
+  'mine.planMonthly': '月付',
+  'mine.planYearly': '年付',
+  'mine.replyConcise': '简洁',
+  'mine.replyBalanced': '均衡',
+  'mine.replyDetailed': '详细',
+  'mine.prefTech': '科技',
+  'mine.prefProductivity': '效率工具',
+  'mine.prefFinance': '财经',
+  'mine.prefHealth': '健康',
+  'mine.prefTravel': '出行',
+  'mine.prefLife': '生活',
+  'mine.prefAi': 'AI',
+
+  'ai.title': '🤖 AI 助理',
+  'ai.placeholder': '输入指令，如「帮我把评审会挪到明天」',
+  'ai.send': '发送',
+  'ai.fallbackReply': '抱歉，我刚刚走神了，请再说一次。',
+
+  'briefing.sectionToday': '今日日程',
+  'briefing.sectionTodo': '待办',
+  'briefing.sectionFav': '昨日收藏精选',
+  'briefing.chatHint': '和助理说点什么，或按住麦克风说话',
+  'briefing.aiTag': '— AI 生成内容，仅供参考 —',
+  'briefing.inputPlaceholder': '输入指令，如「把评审会挪到明天」',
+  'briefing.deepPlaceholder': '深思中：说说你在纠结什么',
+  'briefing.deepToggle': '深度思考开关',
+  'briefing.subscribe': '订阅',
+  'briefing.subscribeHint': '订阅提醒后，每天早上 {time} 叫醒你。建议把小程序添加到「我的小程序」',
+  'briefing.voiceQuota': '本月语音免费额度 {used}/{total} 条',
+  'briefing.subscribedVoice': '订阅用户语音畅聊',
+  'briefing.quickSchedule': '安排日程',
+  'briefing.quickNote': '记一条',
+  'briefing.quickDone': '完成待办',
+  'briefing.quickHot': '今日热点',
+  'briefing.emptyTitle': '今天还没有安排',
+  'briefing.emptyHint': '去收件箱把微信消息转发进来，我帮你提取日程和待办',
+  'briefing.loadFailed': '晨报加载失败',
+  'briefing.voiceLimitTitle': '语音额度已用完',
+  'briefing.voiceLimitContent': '本月免费语音条数已用完，订阅后不限次畅聊。',
+  'briefing.goSubscribe': '去订阅',
+  'briefing.subscribeWeappOnly': '微信端支持订阅消息提醒',
+  'briefing.subscribeOk': '明早见！',
+  'briefing.subscribeFail': '订阅失败，请稍后再试',
+  'briefing.voiceTodo': '语音转写将在正式版开放，先用文字试试',
+
+  'inbox.pasteTitle': '粘贴要处理的内容',
+  'inbox.tabExtract': '📅 提取日程待办',
+  'inbox.tabWork': '🤖 工作助手',
+  'inbox.screenshot': '截图',
+  'inbox.copyResult': '📋 复制结果',
+  'inbox.resultTitle': '提取结果',
+  'inbox.resultMeta': '点击文字可修改',
+  'inbox.conflictTitle': '⚠️ 排班冲突检测',
+  'inbox.historyTitle': '最近处理',
+  'inbox.timePlaceholder': '时间，如 2026-09-09 10:00',
+
+  'library.hotTitle': '今日热点',
+  'library.hotHint': '按你的偏好聚合 · 标注来源',
+  'library.favTitle': '我的收藏',
+  'library.favHint': '转发内容的 AI 摘要归档',
+  'library.searchPlaceholder': '搜索热点和收藏',
+
+  'calendar.legendSchedule': '日程',
+  'calendar.legendTodo': '待办',
+
+  'search.loading': '加载中…',
+  'search.empty': '输入关键词，找回你存过的任何东西',
+  'search.placeholder': '搜索日程、待办、收藏…',
+
+  'history.title': '浏览历史',
+  'history.hint': '你看过的热点资讯都会留在这里，只保存在你的手机上',
+
+  'shopping.title': '购物清单',
+  'shopping.addPlaceholder': '想买什么，如「蓝牙耳机」',
+  'shopping.targetPlaceholder': '预算 ¥',
+  'shopping.add': '加入清单',
+  'shopping.summaryHint': '点商品可记多平台比价',
+  'shopping.hint': '点记价 · 比价后可看最低',
+  'shopping.bought': '已买',
+  'shopping.unbought': '标记未买'
+};
+
+const en: Record<keyof typeof zh, string> = {
+  'tab.briefing': 'Briefing',
+  'tab.inbox': 'Inbox',
+  'tab.hotspot': 'Hotspot',
+  'tab.calendar': 'Calendar',
+  'tab.mine': 'Me',
+
+  'app.title': 'Personal Morning Assistant',
+
+  'common.itemCount': 'items',
+
+  'mine.avatarEdit': 'Tap avatar',
+  'mine.subTitle': 'Subscribe to Personal Morning Assistant',
+  'mine.quotaTitle': 'Monthly Quota',
+  'mine.quotaVoice': '🎙 Voice Chat',
+  'mine.quotaFav': '🔖 Saved Space',
+  'mine.recent': 'Recent Activity',
+  'mine.nicknamePlaceholder': 'What should I call you',
+  'mine.settingGeneral': 'General',
+  'mine.nickname': 'Nickname',
+  'mine.briefingTime': 'Briefing Time',
+  'mine.briefingRemind': 'Briefing Reminder',
+  'mine.settingAi': 'AI Personalization',
+  'mine.prefTags': 'Preference Tags',
+  'mine.prefMax': 'Max 5',
+  'mine.replyStyle': 'Reply Style',
+  'mine.aiMemory': 'AI Memory',
+  'mine.clear': 'Clear',
+  'mine.hotNews': "Today's Hot News",
+  'mine.settingAppearance': 'Appearance',
+  'mine.uiLang': 'Language',
+  'mine.uiColor': 'Theme Color',
+  'mine.uiSize': 'UI Size',
+  'mine.uiSizeSmall': 'S',
+  'mine.uiSizeStandard': 'M',
+  'mine.uiSizeLarge': 'L',
+  'mine.uiSizeXlarge': 'XL',
+  'mine.settingAccount': 'Account & Compliance',
+  'mine.terms': 'Terms of Service',
+  'mine.privacy': 'Privacy Policy',
+  'mine.aiNotice': 'AI Service Notice',
+  'mine.privacyManage': 'Privacy Management',
+  'mine.manageAuth': 'Manage My Authorization',
+  'mine.service': 'Contact Support',
+  'mine.feedback': 'Online Feedback',
+  'mine.deleteAccount': 'Delete Account',
+  'mine.deleteData': 'Delete All Data',
+  'mine.shopping': '🛒 Shopping List',
+  'mine.shoppingDesc': 'Save items to buy · compare prices',
+  'mine.privacyNote': 'Privacy: forwarded content is only used to generate your schedule, to-dos and summaries, stored on domestic servers; data deletion & support entries are above.',
+  'mine.docRead': "I've read it",
+  'mine.badgeSubscribed': 'Subscribed',
+  'mine.subDesc': 'Unlimited voice briefings · unlimited saves · memory-adaptive briefings · early access to new features',
+  'mine.freeUser': 'Free plan user',
+  'mine.earlyBirdBadge': 'Early Bird Member',
+  'mine.memberBadge': 'Subscriber',
+  'mine.priceNote': '/mo starting · first 500 locked price (now: {plan})',
+  'mine.subscribe': 'Subscribe Now',
+  'mine.subscribing': 'Ordering…',
+  'mine.unlimited': 'Unlimited',
+  'mine.memoryCount': '{n} memories',
+  'mine.recentEmpty': 'No recent activity. Chatting with AI, browsing hotspots and completing to-dos will be recorded here.',
+  'mine.planEarlyBird': 'Early Bird Monthly',
+  'mine.planMonthly': 'Monthly',
+  'mine.planYearly': 'Yearly',
+  'mine.replyConcise': 'Concise',
+  'mine.replyBalanced': 'Balanced',
+  'mine.replyDetailed': 'Detailed',
+  'mine.prefTech': 'Tech',
+  'mine.prefProductivity': 'Productivity',
+  'mine.prefFinance': 'Finance',
+  'mine.prefHealth': 'Health',
+  'mine.prefTravel': 'Travel',
+  'mine.prefLife': 'Lifestyle',
+  'mine.prefAi': 'AI',
+
+  'ai.title': '🤖 AI Assistant',
+  'ai.placeholder': 'Type a command, e.g. "Move the review to tomorrow"',
+  'ai.send': 'Send',
+  'ai.fallbackReply': 'Sorry, I got distracted. Please say that again.',
+
+  'briefing.sectionToday': "Today's Schedule",
+  'briefing.sectionTodo': 'To-dos',
+  'briefing.sectionFav': "Yesterday's Picks",
+  'briefing.chatHint': 'Talk to me, or hold the mic to speak',
+  'briefing.aiTag': '— AI-generated content, for reference only —',
+  'briefing.inputPlaceholder': 'Type a command, e.g. "Move the review to tomorrow"',
+  'briefing.deepPlaceholder': 'Deep thinking: tell me what you are weighing',
+  'briefing.deepToggle': 'Toggle deep thinking',
+  'briefing.subscribe': 'Subscribe',
+  'briefing.subscribeHint': 'After subscribing, I will wake you every morning at {time}. Add this mini program to "My Mini Programs"',
+  'briefing.voiceQuota': 'Free voice quota this month: {used}/{total}',
+  'briefing.subscribedVoice': 'Subscribers enjoy unlimited voice chat',
+  'briefing.quickSchedule': 'Schedule',
+  'briefing.quickNote': 'Quick note',
+  'briefing.quickDone': 'Done',
+  'briefing.quickHot': 'Hotspot',
+  'briefing.emptyTitle': 'Nothing scheduled today',
+  'briefing.emptyHint': 'Forward messages from WeChat to Inbox and I will extract your schedule and to-dos',
+  'briefing.loadFailed': 'Failed to load briefing',
+  'briefing.voiceLimitTitle': 'Voice quota used up',
+  'briefing.voiceLimitContent': "This month's free voice messages are used up. Subscribe for unlimited chat.",
+  'briefing.goSubscribe': 'Subscribe',
+  'briefing.subscribeWeappOnly': 'Subscription reminders are available on WeChat',
+  'briefing.subscribeOk': 'See you tomorrow!',
+  'briefing.subscribeFail': 'Subscription failed, please try again later',
+  'briefing.voiceTodo': 'Voice transcription arrives in the official release. Try text for now.',
+
+  'inbox.pasteTitle': 'Paste content to process',
+  'inbox.tabExtract': '📅 Extract schedule & to-dos',
+  'inbox.tabWork': '🤖 Work Assistant',
+  'inbox.screenshot': 'Screenshot',
+  'inbox.copyResult': '📋 Copy Result',
+  'inbox.resultTitle': 'Extraction Result',
+  'inbox.resultMeta': 'Tap text to edit',
+  'inbox.conflictTitle': '⚠️ Schedule Conflict',
+  'inbox.historyTitle': 'Recent',
+  'inbox.timePlaceholder': 'Time, e.g. 2026-09-09 10:00',
+
+  'library.hotTitle': "Today's Hotspot",
+  'library.hotHint': 'Curated by your interests · sources labeled',
+  'library.favTitle': 'My Saved',
+  'library.favHint': 'AI-summarized archive of forwarded content',
+  'library.searchPlaceholder': 'Search hotspots & saved',
+
+  'calendar.legendSchedule': 'Schedule',
+  'calendar.legendTodo': 'To-dos',
+
+  'search.loading': 'Loading…',
+  'search.empty': 'Search to find anything you saved',
+  'search.placeholder': 'Search schedule, to-dos, saved…',
+
+  'history.title': 'Browsing History',
+  'history.hint': 'Everything you viewed stays here, only on your phone',
+
+  'shopping.title': 'Shopping List',
+  'shopping.addPlaceholder': 'What to buy, e.g. "Bluetooth earbuds"',
+  'shopping.targetPlaceholder': 'Budget ¥',
+  'shopping.add': 'Add to List',
+  'shopping.summaryHint': 'Tap item to log multi-platform prices',
+  'shopping.hint': 'Tap to log price',
+  'shopping.bought': 'Bought',
+  'shopping.unbought': 'Mark as not bought'
+};
+
+export type LangKey = keyof typeof zh;
+export const dict: Record<Lang, Record<LangKey, string>> = { zh, en };
+
+interface LanguageState {
+  lang: Lang;
+  setLang: (l: Lang) => void;
+}
+
+export const useLanguageStore = create<LanguageState>((set) => ({
+  lang: 'zh',
+  setLang: (l) => {
+    set({ lang: l });
+    try {
+      Taro.setStorageSync(STORAGE_KEY, l);
+    } catch (err) {
+      console.warn('[LanguageStore] persist failed:', err);
+    }
+  }
+}));
+
+// 模块加载时恢复本地选择
+try {
+  const saved = Taro.getStorageSync(STORAGE_KEY) as Lang;
+  if (saved === 'zh' || saved === 'en') useLanguageStore.setState({ lang: saved });
+} catch (err) {
+  console.warn('[LanguageStore] restore failed:', err);
+}
+
+/** 组件内取翻译函数：语言切换时自动触发重渲染；支持 {key} 参数插值 */
+export function useT() {
+  const lang = useLanguageStore((s) => s.lang);
+  return (key: LangKey, params?: Record<string, string | number>): string => {
+    let str = dict[lang][key] ?? zh[key] ?? key;
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        str = str.split(`{${k}}`).join(String(v));
+      });
+    }
+    return str;
+  };
+}

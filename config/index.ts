@@ -54,8 +54,15 @@ export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
       },
     },
     h5: {
-      publicPath: '/',
+      publicPath: './',
       staticDirectory: 'static',
+      router: {
+        mode: 'hash',
+        // 关闭页面切换动画：动画样式会把 .taro_page 平移到屏幕外，依赖 onLoad 回调注入
+        // taro_page_show 类才滑入，快速导航/弱环境存在竞态（Taro page.js FIXME 自认）导致整页白屏。
+        // 关闭后无屏外隐藏机制，页面始终可见；仅 H5 失去过渡动画，小程序端不受影响。
+        animation: false
+      },
       output: {
         filename: 'js/[name].[hash:8].js',
         chunkFilename: 'js/[name].[chunkhash:8].js',
@@ -88,6 +95,9 @@ export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
       },
       webpackChain(chain) {
         chain.resolve.plugin('tsconfig-paths').use(TsconfigPathsPlugin);
+        // 所有 JS chunk 合并为单文件：消除「旧 html 引用已删除的懒加载 chunk → 白屏」问题
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        chain.plugin('limit-chunk-count').use(require('webpack').optimize.LimitChunkCountPlugin, [{ maxChunks: 1 }]);
       },
     },
     rn: {

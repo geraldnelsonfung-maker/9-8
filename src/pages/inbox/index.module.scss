@@ -52,6 +52,256 @@
   box-sizing: border-box;
 }
 
+/* 截图/图片输入 */
+.imageRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  margin-top: $spacing-md;
+}
+
+.imageThumb {
+  position: relative;
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: $radius-md;
+  overflow: hidden;
+}
+
+.imagePic {
+  width: 100%;
+  height: 100%;
+}
+
+.imageRemove {
+  position: absolute;
+  top: 4rpx;
+  right: 4rpx;
+  width: 36rpx;
+  height: 36rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-round;
+  background: rgba(0, 0, 0, 0.55);
+  color: $color-text-white;
+  font-size: $font-size-xs;
+}
+
+.imageAdd {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: $radius-md;
+  border: 2rpx dashed $color-text-disabled;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.7;
+  }
+}
+
+.imageAddIcon {
+  font-size: 36rpx;
+}
+
+.imageRemoveText {
+  font-size: $font-size-xs;
+  line-height: 1;
+}
+
+// 模式切换：提取日程待办 / 工作助手
+.modeTabs {
+  display: flex;
+  gap: $spacing-xs;
+  background: $color-bg-hover;
+  border-radius: $radius-button;
+  padding: 4rpx;
+  margin: $spacing-sm 0 $spacing-md;
+}
+
+.modeTab {
+  flex: 1;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-button - 4rpx;
+  transition: all $transition-fast;
+}
+
+.modeTabActive {
+  background: $color-bg-card;
+  box-shadow: $shadow-card;
+
+  .modeTabText {
+    color: var(--brand-deep, #{$color-primary-dark});
+    font-weight: $font-weight-semibold;
+  }
+}
+
+.modeTabText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+// 工作助手动作 chips
+.workChips {
+  display: flex;
+  gap: $spacing-sm;
+  margin-top: $spacing-md;
+}
+
+.workChip {
+  flex: 1;
+  height: $button-height-md;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-button;
+  background: var(--brand-soft, #{$color-bg-hover});
+  border: 2rpx solid transparent;
+  transition: all $transition-fast;
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+.workChipActive {
+  background: $color-bg-card;
+  border-color: var(--brand, #{$color-primary});
+}
+
+.workChipText {
+  font-size: $font-size-sm;
+  color: var(--brand-deep, #{$color-primary-dark});
+  font-weight: $font-weight-medium;
+}
+
+// 工作助手分析结果卡
+.workCard {
+  margin-top: $spacing-md;
+  padding: $spacing-md;
+  background: var(--brand-soft, #{$color-bg-hover});
+  border-radius: $radius-md;
+}
+
+.workText {
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.workActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: $spacing-sm;
+}
+
+.copyButton {
+  padding: 10rpx 24rpx;
+  border-radius: $radius-button;
+  background: var(--brand, #{$color-primary});
+}
+
+.copyButtonText {
+  font-size: $font-size-xs;
+  color: $color-text-white;
+}
+
+// 「AI 提取 + 添加截图」按钮横排
+.actionRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  margin-top: $spacing-md;
+
+  .extractButton {
+    flex: 1;
+    width: auto; // 覆盖默认 width:100%，由 flex 分配宽度
+    margin-top: 0;
+  }
+}
+
+.addButton {
+  @include button-reset;
+  flex-shrink: 0;
+  height: $button-height-md;
+  padding: 0 $spacing-lg;
+  border-radius: $radius-button;
+  background: var(--brand-soft, #{$color-bg-hover});
+  color: var(--brand-deep, #{$color-primary-dark});
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  white-space: nowrap;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.85;
+    transform: scale(0.98);
+  }
+}
+
+.imageAddText {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+/* 排班冲突检测 */
+.conflictCard {
+  background: rgba(230, 57, 70, 0.08);
+  border: 1rpx solid rgba(230, 57, 70, 0.35);
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  margin-bottom: $spacing-md;
+}
+
+.conflictTitle {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: #c63a44;
+}
+
+.conflictItem {
+  margin-top: $spacing-sm;
+}
+
+.conflictText {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
+}
+
+.suggestRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  margin-top: $spacing-xs;
+}
+
+.suggestChip {
+  padding: 6rpx $spacing-md;
+  border-radius: $radius-round;
+  background: #c63a44;
+  color: $color-text-white;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.85;
+    transform: scale(0.96);
+  }
+}
+
 .extractButton {
   @include button-reset;
   width: 100%;

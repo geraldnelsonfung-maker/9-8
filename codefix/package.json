@@ -1,0 +1,20 @@
+{
+  "name": "codefix",
+  "version": "0.1.0",
+  "description": "自用代码检查/自动修复引擎：CLI + VS Code 插件共享核心",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "bin": {
+    "codefix": "bin/codefix.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test/run.js"
+  },
+  "license": "MIT"
+}

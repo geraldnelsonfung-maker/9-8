@@ -31,6 +31,28 @@
   font-size: 44rpx;
 }
 
+// 头像按钮：Taro H5 按钮默认 width:100%，需显式重置
+.avatarBtn {
+  @include button-reset;
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-xs;
+  flex-shrink: 0;
+}
+
+.avatarImg {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: $radius-round;
+}
+
+.avatarEdit {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
 .userBody {
   flex: 1;
 }
@@ -218,23 +240,121 @@
   gap: $spacing-xs;
 }
 
-.settingInput {
-  text-align: right;
-  font-size: $font-size-md;
-  color: $color-text-primary;
-  width: 240rpx;
-}
-
-.arrow {
+.entryArrow {
   color: $color-text-disabled;
   font-size: $font-size-sm;
 }
 
-.swatchList {
-  margin-left: auto;
+// ===== 设置项样式（自独立设置页合并） =====
+.card {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  padding: $spacing-md $spacing-lg;
+  margin-bottom: $spacing-md;
+}
+
+.cardTitle {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-text-disabled;
+  font-weight: $font-weight-medium;
+  padding: $spacing-xs 0;
+}
+
+.row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: $spacing-md;
+  padding: $spacing-md 0;
+  border-bottom: 1rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.rowLabel {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  flex-shrink: 0;
+}
+
+.rowValue {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.input {
+  text-align: right;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.valueText {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.valueHint {
+  font-size: $font-size-xs;
+  color: $color-text-disabled;
+}
+
+.linkText {
+  font-size: $font-size-md;
+  color: var(--brand-deep, $color-secondary);
+  font-weight: $font-weight-medium;
+}
+
+.dangerText {
+  font-size: $font-size-md;
+  color: #E5484D;
+}
+
+.arrow {
+  font-size: $font-size-xl;
+  color: $color-text-disabled;
+  line-height: 1;
+}
+
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  padding: $spacing-xs 0 $spacing-md;
+}
+
+.tag {
+  padding: 8rpx 24rpx;
+  border-radius: $radius-round;
+  background: $color-bg-page;
+  border: 1rpx solid transparent;
+}
+
+.tagActive {
+  background: var(--brand-soft, #FFF3EC);
+  border-color: var(--brand, $color-secondary);
+}
+
+.tagText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.tagTextActive {
+  color: var(--brand-deep, $color-secondary);
+  font-weight: $font-weight-medium;
+}
+
+.swatchList {
+  display: flex;
+  gap: $spacing-sm;
 }
 
 .swatch {
@@ -244,22 +364,163 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: $shadow-card;
-  transition: transform $transition-fast;
-
-  &:active {
-    transform: scale(0.9);
-  }
+  border: 4rpx solid transparent;
+  box-sizing: content-box;
 }
 
 .swatchActive {
-  box-shadow: 0 0 0 4rpx #ffffff inset, $shadow-card-hover;
+  border-color: $color-text-primary;
 }
 
 .swatchCheck {
-  font-size: 24rpx;
   color: $color-text-white;
-  font-weight: $font-weight-bold;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+}
+
+// 界面大小档位（小/标准/大/特大）
+.scaleList {
+  display: flex;
+  gap: $spacing-xs;
+}
+
+.scaleChip {
+  min-width: 72rpx;
+  height: 56rpx;
+  padding: 0 $spacing-sm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-button;
+  background: $color-bg-hover;
+  border: 2rpx solid transparent;
+  transition: all $transition-fast;
+
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
+.scaleChipActive {
+  background: var(--brand-soft, #{$color-bg-hover});
+  border-color: var(--brand, #{$color-primary});
+}
+
+.scaleText {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+}
+
+.scaleTextActive {
+  color: var(--brand-deep, #{$color-primary-dark});
+  font-weight: $font-weight-semibold;
+}
+
+// 协议/隐私半屏查看层
+.docMask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 900;
+  display: flex;
+  align-items: flex-end;
+}
+
+.docPanel {
+  width: 100%;
+  max-height: 70vh;
+  background: $color-bg-card;
+  border-radius: $radius-lg $radius-lg 0 0;
+  padding: $spacing-lg $spacing-lg calc(#{$spacing-lg} + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.docTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  text-align: center;
+}
+
+.docBody {
+  flex: 1;
+  min-height: 300rpx;
+  max-height: 50vh;
+}
+
+.docText {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.docClose {
+  @include button-reset;
+  height: $button-height-md;
+  border-radius: $radius-button;
+  background: var(--brand, $color-secondary);
+  color: $color-text-white;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  line-height: $button-height-md;
+}
+
+.logCard {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+}
+
+.logTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-md;
+}
+
+.logRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  padding: $spacing-sm 0;
+  border-bottom: 1rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.logIcon {
+  font-size: $font-size-md;
+}
+
+.logText {
+  flex: 1;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logTime {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  flex-shrink: 0;
+}
+
+.logEmpty {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  line-height: $line-height-loose;
 }
 
 .privacyCard {

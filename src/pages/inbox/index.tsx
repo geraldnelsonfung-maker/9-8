@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
-import { View, Text, Textarea, Input, Button } from '@tarojs/components';
+import React, { useEffect, useState } from 'react';
+import { View, Text, Textarea, Input, Button, Image } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import dayjs from 'dayjs';
 import classnames from 'classnames';
 import EmptyState from '@/components/EmptyState';
-import { apiExtract, apiConfirmItem } from '@/services/api';
+import { apiExtract, apiConfirmItem, apiGetBriefing, apiChat, type WorkAction } from '@/services/api';
 import { useUserStore } from '@/store/user';
 import { fromNow } from '@/utils/date';
-import type { ExtractResult } from '@/types';
+import { detectConflicts, type ConflictInfo } from '@/utils/schedule';
+import type { Briefing, ExtractResult } from '@/types';
+import { useT } from '@/store/language';
 import styles from './index.module.scss';
+
+const isWeapp = process.env.TARO_ENV === 'weapp';
+const isH5 = process.env.TARO_ENV === 'h5';
+/** 最多同时提取的截图张数 */
+const MAX_IMAGES = 3;
 
 /** 待确认条目（提取结果 + 本地编辑状态） */
 interface DraftItem {
@@ -31,25 +38,148 @@ interface HistoryRecord {
 
 let draftKey = 0;
 
+/** H5：File/Blob 转 dataURL（预览用，提交时去掉前缀取 base64） */
+function fileToDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function InboxPage() {
+  const t = useT();
   const [content, setContent] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
   const [note, setNote] = useState<string>('');
   const [history, setHistory] = useState<HistoryRecord[]>([]);
+  const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
+  const [images, setImages] = useState<string[]>([]);
+  const [briefing, setBriefing] = useState<Briefing | null>(null);
+  const [mode, setMode] = useState<'extract' | 'work'>('extract');
+  const [workAction, setWorkAction] = useState('summary');
+  const [workBusy, setWorkBusy] = useState(false);
+  const [workResult, setWorkResult] = useState('');
   const { refreshUsage } = useUserStore();
+
+  useEffect(() => {
+    // 现有日程用于「排班冲突检测」
+    apiGetBriefing()
+      .then(setBriefing)
+      .catch((err) => console.warn('[InboxPage] load briefing for conflict check failed:', err));
+  }, []);
+
+  // H5：支持 Ctrl+V 直接粘贴截屏图片
+  useEffect(() => {
+    if (isWeapp) return undefined;
+    const onPaste = (e: ClipboardEvent) => {
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      let added = 0;
+      Array.from(items).forEach((item) => {
+        if (!item.type.startsWith('image/')) return;
+        const file = item.getAsFile();
+        if (!file) return;
+        e.preventDefault();
+        setImages((prev) => {
+          if (prev.length >= MAX_IMAGES) {
+            Taro.showToast({ title: `最多 ${MAX_IMAGES} 张截图`, icon: 'none' });
+            return prev;
+          }
+          added += 1;
+          fileToDataURL(file).then((dataUrl) => {
+            setImages((list) => (list.includes(dataUrl) ? list : [...list, dataUrl]));
+          });
+          return prev;
+        });
+      });
+      if (added > 0) Taro.showToast({ title: '已添加截图', icon: 'success', duration: 1000 });
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, []);
+
+  /** 添加截图：微信端从相册/拍照选取，H5 弹文件选择 */
+  const handleAddImage = () => {
+    if (images.length >= MAX_IMAGES) {
+      Taro.showToast({ title: `最多 ${MAX_IMAGES} 张截图`, icon: 'none' });
+      return;
+    }
+    if (isWeapp) {
+      Taro.chooseMedia({
+        count: MAX_IMAGES - images.length,
+        mediaType: ['image'],
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
+        success: (res) => {
+          const paths = (res.tempFiles || []).map((f) => f.tempFilePath).filter(Boolean);
+          if (paths.length === 0) return;
+          setImages((prev) => [...prev, ...paths].slice(0, MAX_IMAGES));
+          Taro.showToast({ title: '已添加截图', icon: 'success', duration: 1000 });
+        },
+        fail: (err) => console.info('[InboxPage] chooseMedia cancelled:', err && err.errMsg)
+      });
+    } else {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.multiple = true;
+      input.onchange = () => {
+        const files = Array.from(input.files || []);
+        files.forEach((file) => {
+          setImages((prev) => {
+            if (prev.length >= MAX_IMAGES) return prev;
+            fileToDataURL(file).then((dataUrl) => {
+              setImages((list) => (list.includes(dataUrl) ? list : [...list, dataUrl]));
+            });
+            return prev;
+          });
+        });
+        if (files.length > 0) Taro.showToast({ title: '已添加截图', icon: 'success', duration: 1000 });
+      };
+      input.click();
+    }
+  };
+
+  const removeImage = (idx: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  /** 把展示用的图片（tempFilePath / dataURL）转成提交用的 base64 */
+  const imagesToBase64 = async (): Promise<string[]> => {
+    const out: string[] = [];
+    for (const src of images) {
+      if (isWeapp) {
+        try {
+          const res = await Taro.getFileSystemManager().readFile({
+            filePath: src,
+            encoding: 'base64'
+          });
+          out.push(String(res.data));
+        } catch (err) {
+          console.warn('[InboxPage] read image failed:', err);
+        }
+      } else {
+        const b64 = String(src).split(',')[1] || '';
+        if (b64.length > 100) out.push(b64);
+      }
+    }
+    return out;
+  };
 
   const handleExtract = async () => {
     const text = content.trim();
-    if (!text) {
-      Taro.showToast({ title: '先粘贴微信里复制的内容', icon: 'none' });
+    if (!text && images.length === 0) {
+      Taro.showToast({ title: isH5 ? '粘贴文字，或 Ctrl+V 粘贴截屏' : '先粘贴内容或添加截图', icon: 'none' });
       return;
     }
     if (extracting) return;
     setExtracting(true);
     try {
-      const result = await apiExtract(text);
+      const imagePayload = images.length > 0 ? await imagesToBase64() : [];
+      const result = await apiExtract({ content: text, images: imagePayload });
       console.info('[InboxPage] extract result:', JSON.stringify(result));
       const next: DraftItem[] = [];
       result.events.forEach((evt) => {
@@ -88,6 +218,20 @@ function InboxPage() {
       }
       setDrafts(next);
       setNote(result.note || '');
+      // 排班冲突检测：提取出的日程 vs 现有日程
+      setConflicts(
+        detectConflicts(
+          next
+            .filter((d) => d.kind === 'event' && d.time)
+            .map((d) => ({
+              key: d.key,
+              title: d.title,
+              startTime: d.time as string,
+              endTime: (d.origin as ExtractResult['events'][number]).endTime
+            })),
+          briefing?.events || []
+        )
+      );
       if (next.length === 0) {
         Taro.showToast({ title: '没有提取到日程或待办', icon: 'none' });
       }
@@ -97,6 +241,36 @@ function InboxPage() {
     } finally {
       setExtracting(false);
     }
+  };
+
+  const handleWorkRun = async (action: WorkAction) => {
+    const text = content.trim();
+    if (!text) {
+      Taro.showToast({ title: images.length > 0 ? '工作助手暂只支持文字，请粘贴文字内容' : '先粘贴要分析的内容', icon: 'none' });
+      return;
+    }
+    if (workBusy) return;
+    setWorkAction(action);
+    setWorkBusy(true);
+    try {
+      const res = await apiChat(text, 'text', false, { action });
+      setWorkResult(res.reply || '没有生成结果，请重试。');
+    } catch (err) {
+      console.error('[InboxPage] work assistant failed:', err);
+      Taro.showToast({ title: '分析失败，请稍后再试', icon: 'none' });
+    } finally {
+      setWorkBusy(false);
+    }
+  };
+
+  const copyWorkResult = () => {
+    if (!workResult) return;
+    Taro.setClipboardData({ data: workResult });
+  };
+
+  const switchMode = (next: 'extract' | 'work') => {
+    setMode(next);
+    setWorkResult('');
   };
 
   const toggleDraft = (key: string) => {
@@ -109,6 +283,13 @@ function InboxPage() {
 
   const editDraftTime = (key: string, time: string) => {
     setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, time } : d)));
+  };
+
+  /** 采用 AI 建议时段，并移除对应冲突提示 */
+  const applySuggestion = (draftKey: string, time: string) => {
+    editDraftTime(draftKey, time);
+    setConflicts((prev) => prev.filter((c) => c.draftKey !== draftKey));
+    Taro.showToast({ title: `已改到 ${dayjs(time).format('HH:mm')}`, icon: 'none' });
   };
 
   const handleConfirm = async () => {
@@ -138,18 +319,21 @@ function InboxPage() {
       const res = await apiConfirmItem({ events, todos, collection });
       console.info('[InboxPage] confirmed:', res.saved);
       Taro.showToast({ title: `已入库 ${res.saved} 条`, icon: 'success' });
+      const sourceLabel = images.length > 0 ? `🖼 截图×${images.length}${content.trim() ? ' + 文字' : ''}` : content.trim();
       setHistory((prev) => [
         {
           id: `h-${Date.now()}`,
-          text: content.trim().slice(0, 40),
+          text: sourceLabel.slice(0, 40),
           count: res.saved,
           time: dayjs().toISOString()
         },
         ...prev
       ]);
       setDrafts([]);
+      setConflicts([]);
       setNote('');
       setContent('');
+      setImages([]);
       refreshUsage();
     } catch (err) {
       console.error('[InboxPage] confirm failed:', err);
@@ -170,33 +354,133 @@ function InboxPage() {
       <View className={styles.howTo}>
         <Text className={styles.howIcon}>💡</Text>
         <Text className={styles.howText}>
-          在微信里长按消息「复制」，回到这里粘贴提取；正式版支持直接把消息转发给本小程序。
+          {isH5
+            ? '粘贴微信里复制的内容，或直接 Ctrl+V 粘贴截屏图片；微信端点「添加截图」从相册选取。'
+            : '把截屏图从相册添加进来，或在微信里复制文字粘贴，AI 自动提取日程和待办。'}
         </Text>
       </View>
 
       <View className={styles.inputCard}>
-        <Text className={styles.inputTitle}>粘贴要处理的内容</Text>
+        <Text className={styles.inputTitle}>{t('inbox.pasteTitle')}</Text>
+        {/* 模式切换：提取入库 / 工作助手分析 */}
+        <View className={styles.modeTabs}>
+          <View
+            className={classnames(styles.modeTab, mode === 'extract' && styles.modeTabActive)}
+            onClick={() => switchMode('extract')}
+          >
+            <Text className={styles.modeTabText}>{t('inbox.tabExtract')}</Text>
+          </View>
+          <View
+            className={classnames(styles.modeTab, mode === 'work' && styles.modeTabActive)}
+            onClick={() => switchMode('work')}
+          >
+            <Text className={styles.modeTabText}>{t('inbox.tabWork')}</Text>
+          </View>
+        </View>
         <Textarea
           className={styles.textarea}
           value={content}
           maxlength={2000}
-          placeholder='例：明天上午 10 点在 3 号会议室开产品评审会，会前把演示文稿更新一下'
+          placeholder={
+            mode === 'extract'
+              ? '例：明天上午 10 点在 3 号会议室开产品评审会，会前把演示文稿更新一下'
+              : '粘贴报告 / 会议记录 / 邮件 / 方案，AI 帮你总结、提炼要点、给建议'
+          }
           onInput={(e) => setContent(e.detail.value)}
         />
-        <Button
-          className={classnames(styles.extractButton, extracting && styles.disabled)}
-          onClick={handleExtract}
-        >
-          {extracting ? 'AI 提取中…' : 'AI 提取'}
-        </Button>
+        {mode === 'extract' ? (
+          <>
+            {images.length > 0 ? (
+              <View className={styles.imageRow}>
+                {images.map((src, idx) => (
+                  <View key={src.slice(-24) + idx} className={styles.imageThumb}>
+                    <Image className={styles.imagePic} src={src} mode='aspectFill' />
+                    <View className={styles.imageRemove} onClick={() => removeImage(idx)}>
+                      <Text className={styles.imageRemoveText}>×</Text>
+                    </View>
+                  </View>
+                ))}
+                {images.length < MAX_IMAGES ? (
+                  <View className={styles.imageAdd} onClick={handleAddImage}>
+                    <Text className={styles.imageAddIcon}>＋</Text>
+                    <Text className={styles.imageAddText}>{t('inbox.screenshot')}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+            <View className={styles.actionRow}>
+              <Button
+                className={classnames(styles.extractButton, extracting && styles.disabled)}
+                onClick={handleExtract}
+              >
+                {extracting ? 'AI 提取中…' : 'AI 提取'}
+              </Button>
+              {images.length === 0 ? (
+                <Button className={styles.addButton} onClick={handleAddImage}>
+                  🖼 添加截图
+                </Button>
+              ) : null}
+            </View>
+          </>
+        ) : (
+          <>
+            {/* 工作助手：三个动作 chip，点击即分析 */}
+            <View className={styles.workChips}>
+              {(
+                [
+                  ['summary', '✍️ 总结'],
+                  ['points', '📌 提取要点'],
+                  ['advice', '💡 给建议']
+                ] as [WorkAction, string][]
+              ).map(([action, label]) => (
+                <View
+                  key={action}
+                  className={classnames(styles.workChip, workAction === action && styles.workChipActive)}
+                  onClick={() => handleWorkRun(action)}
+                >
+                  <Text className={styles.workChipText}>{workBusy && workAction === action ? '分析中…' : label}</Text>
+                </View>
+              ))}
+            </View>
+            {workResult ? (
+              <View className={styles.workCard}>
+                <Text className={styles.workText}>{workResult}</Text>
+                <View className={styles.workActions}>
+                  <View className={styles.copyButton} onClick={copyWorkResult}>
+                    <Text className={styles.copyButtonText}>{t('inbox.copyResult')}</Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+          </>
+        )}
       </View>
 
       {drafts.length > 0 ? (
         <View className={styles.resultCard}>
           <View className={styles.resultHeader}>
-            <Text className={styles.resultTitle}>提取结果</Text>
-            <Text className={styles.resultMeta}>点击文字可修改</Text>
+            <Text className={styles.resultTitle}>{t('inbox.resultTitle')}</Text>
+            <Text className={styles.resultMeta}>{t('inbox.resultMeta')}</Text>
           </View>
+          {conflicts.length > 0 ? (
+            <View className={styles.conflictCard}>
+              <Text className={styles.conflictTitle}>{t('inbox.conflictTitle')}</Text>
+              {conflicts.map((c) => (
+                <View key={c.draftKey + c.startTime} className={styles.conflictItem}>
+                  <Text className={styles.conflictText}>
+                    「{c.title}」与现有日程「{c.clashTitle}」（{c.clashTime}）时间冲突，建议改到：
+                  </Text>
+                  <View className={styles.suggestRow}>
+                    {c.suggestions.map((s) => (
+                      <View key={s} className={styles.suggestChip} onClick={() => applySuggestion(c.draftKey, s)}>
+                        改到 {dayjs(s).format('HH:mm')} ✓
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
           {drafts.map((draft) => (
             <View
               key={draft.key}
@@ -231,7 +515,7 @@ function InboxPage() {
                   <Input
                     className={styles.itemTimeInput}
                     value={draft.time || ''}
-                    placeholder='时间，如 2026-09-09 10:00'
+                    placeholder={t('inbox.timePlaceholder')}
                     onInput={(e) => editDraftTime(draft.key, e.detail.value)}
                   />
                 )}
@@ -253,7 +537,7 @@ function InboxPage() {
 
       {history.length > 0 ? (
         <>
-          <Text className={styles.historyTitle}>最近处理</Text>
+          <Text className={styles.historyTitle}>{t('inbox.historyTitle')}</Text>
           {history.map((h) => (
             <View key={h.id} className={styles.historyItem}>
               <Text className={styles.historyIcon}>📥</Text>
@@ -267,7 +551,7 @@ function InboxPage() {
           ))}
         </>
       ) : (
-        <EmptyState icon='📥' title='收件箱还是空的' hint='粘贴一条微信消息试试，AI 会帮你拆出日程和待办' />
+        <EmptyState icon='📥' title='收件箱还是空的' hint='粘贴一条微信消息或截屏试试，AI 会帮你拆出日程和待办' />
       )}
     </View>
   );

@@ -55,22 +55,46 @@ function safeParse(text) {
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext();
   const content = (event && event.content ? String(event.content) : '').trim();
-  if (!content) throw new Error('content is required');
+  // 截图/图片提取：base64 数组（不含 dataURL 前缀），最多 3 张
+  const images = Array.isArray(event && event.images)
+    ? event.images.filter((s) => typeof s === 'string' && s.length > 100).slice(0, 3)
+    : [];
+  if (!content && images.length === 0) throw new Error('content or images is required');
   if (content.length > 5000) throw new Error('content too long (max 5000)');
 
-  const safe = await securityCheck(content, OPENID);
+  // TODO：图片内容安全走 security.imgSecCheck（需 base64 -> Buffer），当前先检查文字部分
+  const safe = await securityCheck(content || '截图提取', OPENID);
   if (!safe) {
     throw new Error('content failed security check');
   }
 
   const now = new Date();
   const nowStr = `${now.toLocaleDateString('sv-SE')} ${now.toTimeString().slice(0, 5)}`;
+
+  // 多模态：有截图时切换视觉模型（GLM-4V-Flash 免费且国内备案；可用 LLM_VISION_MODEL/LLM_VISION_BASE_URL 覆盖）
+  let userMessage;
+  const llmOptions = {};
+  if (images.length > 0) {
+    llmOptions.model = process.env.LLM_VISION_MODEL || 'glm-4v-flash';
+    llmOptions.base = process.env.LLM_VISION_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4';
+    userMessage = [
+      ...images.map((b64) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } })),
+      {
+        type: 'text',
+        text: `当前时间：${nowStr}\n${content ? `用户附言：\n${content}` : '请从截图中提取日程、待办或值得收藏的内容'}`
+      }
+    ];
+  } else {
+    userMessage = `当前时间：${nowStr}\n用户转发内容：\n${content}`;
+  }
+
   const raw = await callLLM(
     [
       { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: `当前时间：${nowStr}\n用户转发内容：\n${content}` }
+      { role: 'user', content: userMessage }
     ],
-    true
+    true,
+    llmOptions
   );
   const parsed = safeParse(raw);
   if (!parsed) {

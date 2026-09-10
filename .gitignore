@@ -3,6 +3,7 @@ node_modules/
 
 # build output
 dist/
+.preview/
 .trae/
 .pai/
 
@@ -25,7 +26,14 @@ Thumbs.db
 .env
 .env.*
 *.local
+.deploy-config.json
 
 # temp
 .temp/
 .swc/
+
+# local toolchain & artifacts
+.tools/
+dist-preview/
+static-server.log*
+.codefix/

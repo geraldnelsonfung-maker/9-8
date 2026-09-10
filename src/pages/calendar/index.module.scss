@@ -1,0 +1,268 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding: $spacing-md $page-padding 80rpx;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.panel,
+.dayPanel {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  padding: $spacing-lg;
+}
+
+.monthBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-md;
+}
+
+.monthLabel {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.navButton {
+  @include button-reset;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: $radius-round;
+  background: $color-bg-page;
+  color: $color-text-primary;
+  font-size: $font-size-xxl;
+  line-height: 64rpx;
+  padding: 0;
+
+  &:active {
+    opacity: 0.85;
+  }
+}
+
+.weekHead,
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.weekDay {
+  text-align: center;
+  font-size: $font-size-xs;
+  color: $color-text-disabled;
+  padding-bottom: $spacing-xs;
+}
+
+.grid {
+  row-gap: $spacing-xs;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  height: 76rpx;
+  border-radius: $radius-md;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.85;
+  }
+}
+
+.cellDay {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.dim {
+  .cellDay {
+    color: $color-text-disabled;
+  }
+}
+
+.today {
+  .cellDay {
+    color: var(--brand-deep);
+    font-weight: $font-weight-semibold;
+  }
+}
+
+.selected {
+  background: var(--brand-soft);
+
+  .cellDay {
+    color: var(--brand-deep);
+    font-weight: $font-weight-semibold;
+  }
+}
+
+.dots {
+  display: flex;
+  gap: 6rpx;
+  height: 10rpx;
+}
+
+.dotEvent,
+.dotTodo {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: $radius-round;
+}
+
+.dotEvent {
+  background: var(--brand);
+}
+
+.dotTodo {
+  background: $color-text-disabled;
+}
+
+.legend {
+  display: flex;
+  gap: $spacing-lg;
+  justify-content: center;
+  margin-top: $spacing-md;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+}
+
+.legendText {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+}
+
+.dayHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-md;
+}
+
+.dayTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.syncButton {
+  @include button-reset;
+  height: 56rpx;
+  padding: 0 $spacing-md;
+  border-radius: $radius-button;
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  line-height: 56rpx;
+
+  &:active {
+    opacity: 0.85;
+  }
+}
+
+.eventRow {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-md;
+  padding: $spacing-md 0;
+  border-bottom: 1rpx solid $color-divider;
+}
+
+.timeTag {
+  background: var(--brand-soft);
+  border-radius: $radius-sm;
+  padding: 4rpx $spacing-sm;
+  flex-shrink: 0;
+}
+
+.timeText {
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: var(--brand-deep);
+}
+
+.eventBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.eventTitle {
+  display: block;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  font-weight: $font-weight-medium;
+  @include text-ellipsis;
+}
+
+.eventLoc {
+  display: block;
+  margin-top: 4rpx;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+}
+
+.todoRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  padding: $spacing-md 0;
+  border-bottom: 1rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.todoCheck {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: $radius-sm;
+  border: 2rpx solid $color-divider;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.todoChecked {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.checkMark {
+  color: $color-text-white;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+}
+
+.todoTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  @include text-ellipsis;
+}
+
+.todoDone {
+  color: $color-text-disabled;
+  text-decoration: line-through;
+}
+
+.todoDue {
+  font-size: $font-size-xs;
+  color: $color-text-disabled;
+  flex-shrink: 0;
+}

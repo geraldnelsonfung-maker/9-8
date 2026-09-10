@@ -3,8 +3,11 @@ export default defineAppConfig({
     'pages/briefing/index',
     'pages/inbox/index',
     'pages/library/index',
+    'pages/calendar/index',
     'pages/mine/index',
-    'pages/search/index'
+    'pages/search/index',
+    'pages/history/index',
+    'pages/shopping/index'
   ],
   window: {
     backgroundTextStyle: 'light',
@@ -32,9 +35,15 @@ export default defineAppConfig({
       },
       {
         pagePath: 'pages/library/index',
-        text: '收藏',
+        text: '热点',
         iconPath: 'assets/tabbar/library.svg',
         selectedIconPath: 'assets/tabbar/library-selected.svg'
+      },
+      {
+        pagePath: 'pages/calendar/index',
+        text: '日历',
+        iconPath: 'assets/tabbar/calendar.svg',
+        selectedIconPath: 'assets/tabbar/calendar-selected.svg'
       },
       {
         pagePath: 'pages/mine/index',

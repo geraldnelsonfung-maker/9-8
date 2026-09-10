@@ -8,13 +8,13 @@
 const https = require('https');
 const { URL } = require('url');
 
-function callLLM(messages, jsonMode) {
+function callLLM(messages, jsonMode, options) {
   const apiKey = process.env.LLM_API_KEY;
   if (!apiKey) {
     throw new Error('LLM_API_KEY not configured');
   }
-  const base = process.env.LLM_BASE_URL || 'https://api.deepseek.com';
-  const model = process.env.LLM_MODEL || 'deepseek-chat';
+  const base = (options && options.base) || process.env.LLM_BASE_URL || 'https://api.deepseek.com';
+  const model = (options && options.model) || process.env.LLM_MODEL || 'deepseek-chat';
   const endpoint = new URL('/chat/completions', base);
 
   const payload = JSON.stringify({

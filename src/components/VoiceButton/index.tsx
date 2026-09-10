@@ -17,6 +17,8 @@ export interface VoiceResult {
 
 interface VoiceButtonProps {
   disabled?: boolean;
+  /** 紧凑模式：仅图标方块，用于嵌入单行输入栏 */
+  compact?: boolean;
   onResult: (result: VoiceResult) => void;
 }
 
@@ -25,7 +27,7 @@ interface VoiceButtonProps {
  * 微信端使用 RecorderManager 录音，松开后回调录音文件与时长；
  * 其他平台（H5 预览）模拟录音时长，由上层走 mock 对话。
  */
-export default function VoiceButton({ disabled = false, onResult }: VoiceButtonProps) {
+export default function VoiceButton({ disabled = false, compact = false, onResult }: VoiceButtonProps) {
   const [recording, setRecording] = useState(false);
   const [cancelMode, setCancelMode] = useState(false);
   const startAtRef = useRef<number>(0);
@@ -91,7 +93,7 @@ export default function VoiceButton({ disabled = false, onResult }: VoiceButtonP
   };
 
   return (
-    <View className={styles.wrapper}>
+    <View className={classnames(styles.wrapper, compact && styles.compact)}>
       {recording ? (
         <View className={styles.overlay}>
           <View className={classnames(styles.wave, cancelMode && styles.waveCancel)} />
@@ -99,13 +101,18 @@ export default function VoiceButton({ disabled = false, onResult }: VoiceButtonP
         </View>
       ) : null}
       <View
-        className={classnames(styles.button, recording && styles.recording, disabled && styles.disabled)}
+        className={classnames(
+          styles.button,
+          compact && styles.compact,
+          recording && styles.recording,
+          disabled && styles.disabled
+        )}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         <Text className={styles.mic}>🎙</Text>
-        <Text className={styles.label}>按住说话</Text>
+        {!compact ? <Text className={styles.label}>按住说话</Text> : null}
       </View>
     </View>
   );

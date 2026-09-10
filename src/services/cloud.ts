@@ -6,7 +6,9 @@ export async function callFunction<T = any>(
   name: string,
   data?: Record<string, any>
 ): Promise<T> {
-  if (!isWeapp) {
+  if (!isWeapp || name === 'getHotspot' || name === 'deleteAccount') {
+    // getHotspot：真实端走 webSearch 云函数（RSS 聚合），未部署前双端先用本地 mock
+    // deleteAccount：注销云函数部署前双端先用本地 mock（前端清 storage）
     const mockModule = await import(`../data/${name}`)
     return mockModule.default(data) as T
   }
@@ -17,11 +19,4 @@ export async function callFunction<T = any>(
     throw new Error(result.message || '请求失败')
   }
   return result.data
-}
-
-export function getDatabase() {
-  if (!isWeapp) {
-    return null
-  }
-  return Taro.cloud.database()
 }

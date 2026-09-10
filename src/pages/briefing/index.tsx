@@ -9,12 +9,23 @@ import { apiGetBriefing, apiChat } from '@/services/api';
 import { useUserStore } from '@/store/user';
 import { brandVars, useThemeStore } from '@/store/theme';
 import { getGreeting, formatEventTime } from '@/utils/date';
+import { logActivity } from '@/utils/activityLog';
 import type { Briefing, ChatMessage } from '@/types';
+import { useT, useLanguageStore } from '@/store/language';
+import type { LangKey } from '@/store/language';
 import styles from './index.module.scss';
 
 const isWeapp = process.env.TARO_ENV === 'weapp';
 /** H5 预览端底部有 50px TabBar，输入栏需避让 */
 const isH5 = process.env.TARO_ENV === 'h5';
+
+/** 快捷指令（优化输入：点击填充输入框，减少手打成本） */
+const QUICK_COMMANDS: Array<{ icon: string; labelKey: LangKey; text: string }> = [
+  { icon: '📅', labelKey: 'briefing.quickSchedule', text: '帮我安排 ' },
+  { icon: '✍️', labelKey: 'briefing.quickNote', text: '记一下：' },
+  { icon: '✅', labelKey: 'briefing.quickDone', text: '完成了「」' },
+  { icon: '🔥', labelKey: 'briefing.quickHot', text: '今天有什么热点' }
+];
 /** 订阅消息模板 ID：上线前在小程序后台申请后替换（TODO） */
 const SUBSCRIBE_TEMPLATE_ID = 'TODO_TEMPLATE_ID';
 /** H5 预览时模拟语音转写的示例指令 */
@@ -23,15 +34,19 @@ const MOCK_TRANSCRIPTS = [
   '我今天有什么安排',
   '回复客户邮件这个待办完成了'
 ];
-const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const WEEKDAYS_ZH = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const WEEKDAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function BriefingPage() {
+  const t = useT();
+  const lang = useLanguageStore((s) => s.lang);
   const { theme } = useThemeStore();
   const [briefing, setBriefing] = useState<Briefing | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [deepMode, setDeepMode] = useState(false);
+  const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const { profile, usage, init, refreshUsage } = useUserStore();
   const mockIndexRef = useRef(0);
   const msgIdRef = useRef(0);
@@ -42,9 +57,9 @@ function BriefingPage() {
       setBriefing(data);
     } catch (err) {
       console.error('[BriefingPage] loadBriefing failed:', err);
-      Taro.showToast({ title: '晨报加载失败', icon: 'none' });
+      Taro.showToast({ title: t('briefing.loadFailed'), icon: 'none' });
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     init();
@@ -76,9 +91,10 @@ function BriefingPage() {
     try {
       const res = await apiChat(message, type, deepMode);
       pushMessage('assistant', res.reply, 'text', deepMode);
+      logActivity(deepMode ? '🧠' : '💬', deepMode ? `深度思考：${message.slice(0, 14)}` : `AI 对话：${message.slice(0, 14)}`);
     } catch (err) {
       console.error('[BriefingPage] chat failed:', err);
-      pushMessage('assistant', '抱歉，我刚刚走神了，请再说一次。');
+      pushMessage('assistant', t('ai.fallbackReply'));
     } finally {
       setSending(false);
     }
@@ -86,6 +102,20 @@ function BriefingPage() {
 
   const handleGoSearch = () => {
     Taro.navigateTo({ url: '/pages/search/index' });
+  };
+
+  /** 待办勾选完成（v2.0 F27），复用对话通道记录 */
+  const handleToggleTodo = async (todoId: string, title: string) => {
+    const next = new Set(doneIds);
+    const finishing = !next.has(todoId);
+    if (finishing) next.add(todoId);
+    else next.delete(todoId);
+    setDoneIds(next);
+    try {
+      await apiChat(finishing ? `完成了「${title}」` : `取消完成「${title}」`);
+    } catch (err) {
+      console.error('[BriefingPage] toggle todo failed:', err);
+    }
   };
 
   const handleSendText = () => {
@@ -99,9 +129,9 @@ function BriefingPage() {
     if (!usage) return true;
     if (usage.voiceQuota >= 0 && usage.voiceUsed >= usage.voiceQuota) {
       Taro.showModal({
-        title: '语音额度已用完',
-        content: '本月免费语音条数已用完，订阅后不限次畅聊。',
-        confirmText: '去订阅',
+        title: t('briefing.voiceLimitTitle'),
+        content: t('briefing.voiceLimitContent'),
+        confirmText: t('briefing.goSubscribe'),
         success: (res) => {
           if (res.confirm) Taro.switchTab({ url: '/pages/mine/index' });
         }
@@ -117,7 +147,7 @@ function BriefingPage() {
     if (isWeapp && result.tempFilePath) {
       // TODO：发布版接入微信同声传译插件完成 ASR 转写后，把 transcript 传给 askAssistant
       console.info('[BriefingPage] voice recorded:', { duration: result.duration, tempFilePath: result.tempFilePath });
-      Taro.showToast({ title: '语音转写将在正式版开放，先用文字试试', icon: 'none', duration: 2000 });
+      Taro.showToast({ title: t('briefing.voiceTodo'), icon: 'none', duration: 2000 });
       return;
     }
     // 非微信端：模拟转写结果
@@ -128,24 +158,43 @@ function BriefingPage() {
 
   const handleSubscribe = async () => {
     if (!isWeapp) {
-      Taro.showToast({ title: '微信端支持订阅消息提醒', icon: 'none' });
+      Taro.showToast({ title: t('briefing.subscribeWeappOnly'), icon: 'none' });
       return;
     }
     try {
       const res = await Taro.requestSubscribeMessage({ tmplIds: [SUBSCRIBE_TEMPLATE_ID] });
       console.info('[BriefingPage] subscribe result:', res[SUBSCRIBE_TEMPLATE_ID]);
       if (res[SUBSCRIBE_TEMPLATE_ID] === 'accept') {
-        Taro.showToast({ title: '明早见！', icon: 'success' });
+        Taro.showToast({ title: t('briefing.subscribeOk'), icon: 'success' });
       }
     } catch (err) {
       console.error('[BriefingPage] subscribe failed:', err);
-      Taro.showToast({ title: '订阅失败，请稍后再试', icon: 'none' });
+      Taro.showToast({ title: t('briefing.subscribeFail'), icon: 'none' });
     }
   };
 
   const todayEvents = (briefing?.events || []).filter((e) => dayjs(e.startTime).isSame(dayjs(), 'day'));
+  /** 今日时间线：今日日程 + 今日到期待办，按时间排序（用户需求：待办并入今日日程） */
+  const todaySchedule = [
+    ...todayEvents.map((e) => ({
+      kind: 'event' as const,
+      id: e.id,
+      title: e.title,
+      time: e.startTime,
+      location: e.location
+    })),
+    ...(briefing?.todos || [])
+      .filter((t) => t.dueDate && dayjs(t.dueDate).isSame(dayjs(), 'day'))
+      .map((t) => ({
+        kind: 'todo' as const,
+        id: t.id,
+        title: t.title,
+        time: t.dueDate!,
+        location: undefined as string | undefined
+      }))
+  ].sort((a, b) => dayjs(a.time).valueOf() - dayjs(b.time).valueOf());
   const hasContent =
-    briefing && (todayEvents.length > 0 || briefing.todos.length > 0 || briefing.digest.length > 0);
+    briefing && (todaySchedule.length > 0 || briefing.todos.length > 0 || briefing.digest.length > 0);
   const lastMsgId = messages.length > 0 ? messages[messages.length - 1].id : '';
 
   return (
@@ -158,9 +207,10 @@ function BriefingPage() {
             </Text>
             <View className={styles.dateRow}>
               <Text className={styles.date}>
-                {dayjs().format('M月D日')} {WEEKDAYS[dayjs().day()]}
+                {lang === 'en' ? dayjs().format('MMM D') : dayjs().format('M月D日')}{' '}
+                {(lang === 'en' ? WEEKDAYS_EN : WEEKDAYS_ZH)[dayjs().day()]}
               </Text>
-              {profile?.subscribed ? <Text className={styles.badge}>订阅中</Text> : null}
+              {profile?.subscribed ? <Text className={styles.badge}>{t('mine.badgeSubscribed')}</Text> : null}
             </View>
           </View>
           <Button className={styles.searchButton} onClick={handleGoSearch}>
@@ -171,32 +221,48 @@ function BriefingPage() {
 
       {!hasContent ? (
         <View className={styles.section}>
-          <EmptyState
-            icon='☕'
-            title='今天还没有安排'
-            hint='去收件箱把微信消息转发进来，我帮你提取日程和待办'
-          />
+          <EmptyState icon='☕' title={t('briefing.emptyTitle')} hint={t('briefing.emptyHint')} />
         </View>
       ) : (
         <>
-          {todayEvents.length > 0 ? (
+          {todaySchedule.length > 0 ? (
             <View className={styles.section}>
               <View className={styles.sectionHeader}>
                 <Text className={styles.sectionIcon}>📅</Text>
-                <Text className={styles.sectionTitle}>今日日程</Text>
-                <Text className={styles.sectionCount}>{todayEvents.length} 个</Text>
+                <Text className={styles.sectionTitle}>{t('briefing.sectionToday')}</Text>
+                <Text className={styles.sectionCount}>
+                  {todaySchedule.length} {t('common.itemCount')}
+                </Text>
               </View>
-              {todayEvents.map((evt) => (
-                <View key={evt.id} className={styles.eventItem}>
-                  <View className={styles.timeBlock}>
-                    <Text className={styles.time}>{dayjs(evt.startTime).format('HH:mm')}</Text>
+              {todaySchedule.map((item) => {
+                const done = item.kind === 'todo' && doneIds.has(item.id);
+                return (
+                  <View
+                    key={item.id}
+                    className={styles.eventItem}
+                    onClick={item.kind === 'todo' ? () => handleToggleTodo(item.id, item.title) : undefined}
+                  >
+                    <View className={styles.timeBlock}>
+                      <Text className={styles.time}>{dayjs(item.time).format('HH:mm')}</Text>
+                    </View>
+                    <View className={styles.eventBody}>
+                      {item.kind === 'todo' ? (
+                        <View className={styles.todoInline}>
+                          <View className={classnames(styles.checkbox, done && styles.checkboxDone)}>
+                            {done ? <Text className={styles.checkboxMark}>✓</Text> : null}
+                          </View>
+                          <Text className={classnames(styles.eventTitle, done && styles.todoDone)}>{item.title}</Text>
+                        </View>
+                      ) : (
+                        <>
+                          <Text className={styles.eventTitle}>{item.title}</Text>
+                          {item.location ? <Text className={styles.eventLocation}>📍 {item.location}</Text> : null}
+                        </>
+                      )}
+                    </View>
                   </View>
-                  <View className={styles.eventBody}>
-                    <Text className={styles.eventTitle}>{evt.title}</Text>
-                    {evt.location ? <Text className={styles.eventLocation}>📍 {evt.location}</Text> : null}
-                  </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           ) : null}
 
@@ -204,16 +270,27 @@ function BriefingPage() {
             <View className={styles.section}>
               <View className={styles.sectionHeader}>
                 <Text className={styles.sectionIcon}>✅</Text>
-                <Text className={styles.sectionTitle}>待办</Text>
-                <Text className={styles.sectionCount}>{briefing.todos.length} 项</Text>
+                <Text className={styles.sectionTitle}>{t('briefing.sectionTodo')}</Text>
+                <Text className={styles.sectionCount}>
+                  {briefing.todos.length} {t('common.itemCount')}
+                </Text>
               </View>
-              {briefing.todos.map((todo) => (
-                <View key={todo.id} className={styles.todoItem}>
-                  <View className={styles.checkbox} />
-                  <Text className={styles.todoTitle}>{todo.title}</Text>
-                  {todo.dueDate ? <Text className={styles.todoDue}>{formatEventTime(todo.dueDate)}</Text> : null}
-                </View>
-              ))}
+              {briefing.todos.map((todo) => {
+                const done = doneIds.has(todo.id);
+                return (
+                  <View
+                    key={todo.id}
+                    className={styles.todoItem}
+                    onClick={() => handleToggleTodo(todo.id, todo.title)}
+                  >
+                    <View className={classnames(styles.checkbox, done && styles.checkboxDone)}>
+                      {done ? <Text className={styles.checkboxMark}>✓</Text> : null}
+                    </View>
+                    <Text className={classnames(styles.todoTitle, done && styles.todoDone)}>{todo.title}</Text>
+                    {todo.dueDate ? <Text className={styles.todoDue}>{formatEventTime(todo.dueDate)}</Text> : null}
+                  </View>
+                );
+              })}
             </View>
           ) : null}
 
@@ -221,7 +298,7 @@ function BriefingPage() {
             <View className={styles.section}>
               <View className={styles.sectionHeader}>
                 <Text className={styles.sectionIcon}>📚</Text>
-                <Text className={styles.sectionTitle}>昨日收藏精选</Text>
+                <Text className={styles.sectionTitle}>{t('briefing.sectionFav')}</Text>
               </View>
               {briefing.digest.map((text, i) => (
                 <View key={i} className={styles.digestItem}>
@@ -235,59 +312,76 @@ function BriefingPage() {
 
       <View className={styles.subscribeTip}>
         <Text className={styles.tipIcon}>☀️</Text>
-        <Text className={styles.tipText}>
-          订阅提醒后，每天早上 {profile?.briefingTime || '07:30'} 叫醒你。建议把小程序添加到「我的小程序」
-        </Text>
+        <Text className={styles.tipText}>{t('briefing.subscribeHint', { time: profile?.briefingTime || '07:30' })}</Text>
         <Button className={styles.tipAction} onClick={handleSubscribe}>
-          订阅
+          {t('briefing.subscribe')}
         </Button>
       </View>
 
       <View className={styles.usageHint}>
         {usage && usage.voiceQuota > 0
-          ? `本月语音免费额度 ${usage.voiceUsed}/${usage.voiceQuota} 条`
-          : '订阅用户语音畅聊'}
+          ? t('briefing.voiceQuota', { used: usage.voiceUsed, total: usage.voiceQuota })
+          : t('briefing.subscribedVoice')}
       </View>
 
       {messages.length > 0 ? (
-        <ScrollView scrollY scrollIntoView={lastMsgId} className={styles.messages}>
-          {messages.map((msg) => (
-            <View key={msg.id} id={msg.id} className={classnames(styles.messageRow, msg.role === 'user' && styles.user)}>
-              <View className={classnames(styles.bubble, msg.role === 'user' ? styles.user : styles.assistant)}>
-                {msg.type === 'voice' ? <Text className={styles.voiceTag}>🎙 </Text> : null}
-                {msg.deep ? <Text className={styles.deepTag}>🧠 深思 </Text> : null}
-                <Text>{msg.content}</Text>
+        <React.Fragment>
+          <ScrollView scrollY scrollIntoView={lastMsgId} className={styles.messages}>
+            {messages.map((msg) => (
+              <View key={msg.id} id={msg.id} className={classnames(styles.messageRow, msg.role === 'user' && styles.user)}>
+                <View className={classnames(styles.bubble, msg.role === 'user' ? styles.user : styles.assistant)}>
+                  {msg.type === 'voice' ? <Text className={styles.voiceTag}>🎙 </Text> : null}
+                  {msg.deep ? <Text className={styles.deepTag}>🧠 深思 </Text> : null}
+                  <Text>{msg.content}</Text>
+                </View>
               </View>
-            </View>
-          ))}
-        </ScrollView>
+            ))}
+          </ScrollView>
+          <Text className={styles.aiGeneratedTag}>{t('briefing.aiTag')}</Text>
+        </React.Fragment>
       ) : (
         <View className={styles.chatEmpty}>
-          <Text className={styles.chatHint}>和助理说点什么，或按住麦克风说话</Text>
+          <Text className={styles.chatHint}>{t('briefing.chatHint')}</Text>
         </View>
       )}
 
-      <View className={classnames(styles.inputBar, isH5 && styles.h5Fix)}>
+      <View className={classnames(styles.inputBar, isH5 && styles.h5Fix, isH5 && 'h5Fixed')}>
+        {inputText === '' ? (
+          <View className={styles.quickRow}>
+            {QUICK_COMMANDS.map((cmd) => (
+              <View key={cmd.labelKey} className={styles.quickChip} onClick={() => setInputText(cmd.text)}>
+                <Text className={styles.quickChipIcon}>{cmd.icon}</Text>
+                <Text className={styles.quickChipLabel}>{t(cmd.labelKey)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
         <View className={styles.inputRow}>
+          <Button
+            className={classnames(styles.modeButton, deepMode && styles.modeActive)}
+            onClick={() => setDeepMode((v) => !v)}
+            aria-label={t('briefing.deepToggle')}
+          >
+            🧠
+          </Button>
           <Input
             className={styles.textInput}
             value={inputText}
-            placeholder='输入指令，如「把评审会挪到明天」'
+            placeholder={deepMode ? t('briefing.deepPlaceholder') : t('briefing.inputPlaceholder')}
             onInput={(e) => setInputText(e.detail.value)}
             confirmType='send'
             onConfirm={handleSendText}
           />
-          <Button
-            className={classnames(styles.modeButton, deepMode && styles.modeActive)}
-            onClick={() => setDeepMode((v) => !v)}
-          >
-            🧠 深思
-          </Button>
+          {inputText ? (
+            <View className={styles.clearButton} onClick={() => setInputText('')}>
+              ✕
+            </View>
+          ) : null}
+          <VoiceButton compact disabled={sending} onResult={handleVoiceResult} />
           <Button className={styles.sendButton} onClick={handleSendText} disabled={sending}>
-            发送
+            {t('ai.send')}
           </Button>
         </View>
-        <VoiceButton disabled={sending} onResult={handleVoiceResult} />
       </View>
     </View>
   );

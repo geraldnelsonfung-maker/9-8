@@ -103,6 +103,30 @@ export interface ChatMessage {
   createTime: string;
 }
 
+/** 热点资讯（今日热点页，v2.0） */
+export interface HotspotNews {
+  id: string;
+  title: string;
+  summary: string;
+  /** 来源媒体名（合规要求：必须标注） */
+  source: string;
+  /** 原文链接（若有） */
+  url?: string;
+  tags: string[];
+  createTime: string;
+}
+
+/** 浏览历史条目（v2.0） */
+export interface HistoryEntry {
+  id: string;
+  /** 资讯标题 */
+  title: string;
+  /** 来源 */
+  source?: string;
+  /** 浏览时间 ISO */
+  viewedAt: string;
+}
+
 /** 支付订单 */
 export interface PayOrder {
   orderId: string;

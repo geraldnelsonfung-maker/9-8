@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView } from '@tarojs/components';
+import { View, Text, ScrollView, Input } from '@tarojs/components';
 import Taro from '@tarojs/taro';
+import dayjs from 'dayjs';
 import TagChip from '@/components/TagChip';
 import EmptyState from '@/components/EmptyState';
-import { apiGetLibrary } from '@/services/api';
+import { apiGetLibrary, apiGetHotspot } from '@/services/api';
 import { useUserStore } from '@/store/user';
 import { fromNow } from '@/utils/date';
-import type { CollectionItem } from '@/types';
+import { logActivity } from '@/utils/activityLog';
+import type { CollectionItem, HotspotNews } from '@/types';
+import { useT } from '@/store/language';
 import styles from './index.module.scss';
 
 const TYPE_ICONS: Record<CollectionItem['sourceType'], string> = {
@@ -15,21 +18,42 @@ const TYPE_ICONS: Record<CollectionItem['sourceType'], string> = {
   link: '🔗'
 };
 
+const HISTORY_KEY = 'browseHistory';
+const HISTORY_LIMIT = 50;
+
+/** 记录浏览历史（v2.0，点头像在「我的-浏览历史」查看） */
+export function recordBrowseHistory(entry: { id: string; title: string; source?: string }) {
+  try {
+    const list = Taro.getStorageSync(HISTORY_KEY) || [];
+    const next = [
+      { ...entry, viewedAt: dayjs().toISOString() },
+      ...list.filter((it: { id: string }) => it.id !== entry.id)
+    ].slice(0, HISTORY_LIMIT);
+    Taro.setStorageSync(HISTORY_KEY, next);
+  } catch (err) {
+    console.error('[LibraryPage] record history failed:', err);
+  }
+}
+
 function LibraryPage() {
+  const t = useT();
   const [items, setItems] = useState<CollectionItem[]>([]);
+  const [news, setNews] = useState<HotspotNews[]>([]);
   const [activeTag, setActiveTag] = useState('全部');
+  const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(true);
   const { refreshUsage } = useUserStore();
 
   useEffect(() => {
-    apiGetLibrary()
-      .then((data) => {
-        setItems(data);
+    Promise.all([apiGetLibrary(), apiGetHotspot().catch(() => [])])
+      .then(([lib, hotspot]) => {
+        setItems(lib);
+        setNews(hotspot);
         refreshUsage();
       })
       .catch((err) => {
         console.error('[LibraryPage] load failed:', err);
-        Taro.showToast({ title: '收藏加载失败', icon: 'none' });
+        Taro.showToast({ title: '加载失败', icon: 'none' });
       })
       .finally(() => setLoading(false));
   }, []);
@@ -41,8 +65,24 @@ function LibraryPage() {
   }, [items]);
 
   const filtered = useMemo(
-    () => (activeTag === '全部' ? items : items.filter((item) => item.tags.includes(activeTag))),
-    [items, activeTag]
+    () =>
+      items.filter(
+        (item) =>
+          (activeTag === '全部' || item.tags.includes(activeTag)) &&
+          (!keyword ||
+            item.title.includes(keyword) ||
+            item.summary.includes(keyword) ||
+            item.tags.some((t) => t.includes(keyword)))
+      ),
+    [items, activeTag, keyword]
+  );
+
+  const newsFiltered = useMemo(
+    () =>
+      keyword
+        ? news.filter((n) => n.title.includes(keyword) || n.summary.includes(keyword))
+        : news,
+    [news, keyword]
   );
 
   const handleCopy = (item: CollectionItem) => {
@@ -52,8 +92,56 @@ function LibraryPage() {
     }).catch((err) => console.error('[LibraryPage] copy failed:', err));
   };
 
+  const handleNewsTap = (item: HotspotNews) => {
+    recordBrowseHistory({ id: item.id, title: item.title, source: item.source });
+    logActivity('🔥', `浏览热点：${item.title.slice(0, 14)}`);
+    Taro.showToast({ title: `来源：${item.source}`, icon: 'none', duration: 1500 });
+  };
+
   return (
     <View className={styles.page}>
+      <View className={styles.searchBar}>
+        <Text className={styles.searchIcon}>🔍</Text>
+        <Input
+          className={styles.searchInput}
+          value={keyword}
+          placeholder={t('library.searchPlaceholder')}
+          confirmType='search'
+          onInput={(e) => setKeyword(e.detail.value)}
+        />
+        {keyword ? (
+          <Text className={styles.searchClear} onClick={() => setKeyword('')}>
+            ✕
+          </Text>
+        ) : null}
+      </View>
+
+      {newsFiltered.length > 0 ? (
+        <View className={styles.hotspot}>
+          <View className={styles.sectionBar}>
+            <Text className={styles.sectionBarIcon}>🔥</Text>
+            <Text className={styles.sectionBarTitle}>{t('library.hotTitle')}</Text>
+            <Text className={styles.sectionBarHint}>{t('library.hotHint')}</Text>
+          </View>
+          {newsFiltered.map((item) => (
+            <View key={item.id} className={styles.newsCard} onClick={() => handleNewsTap(item)}>
+              <Text className={styles.newsTitle}>{item.title}</Text>
+              <Text className={styles.newsSummary}>{item.summary}</Text>
+              <View className={styles.newsMeta}>
+                <Text className={styles.newsSource}>来源 · {item.source}</Text>
+                <Text className={styles.newsTime}>{fromNow(item.createTime)}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <View className={styles.sectionBar}>
+        <Text className={styles.sectionBarIcon}>🔖</Text>
+        <Text className={styles.sectionBarTitle}>{t('library.favTitle')}</Text>
+        <Text className={styles.sectionBarHint}>{t('library.favHint')}</Text>
+      </View>
+
       <View className={styles.filterBar}>
         <ScrollView scrollX className={styles.chipScroll}>
           {tags.map((tag) => (
@@ -83,8 +171,12 @@ function LibraryPage() {
       {!loading && filtered.length === 0 ? (
         <EmptyState
           icon='🔖'
-          title={activeTag === '全部' ? '还没有收藏' : '这个标签下还没有内容'}
-          hint='在收件箱粘贴内容时勾选「收藏」，AI 摘要会存到这里'
+          title={keyword ? '没有找到相关内容' : activeTag === '全部' ? '还没有收藏' : '这个标签下还没有内容'}
+          hint={
+            keyword
+              ? '换个关键词试试，支持匹配标题、摘要和标签'
+              : '在收件箱粘贴内容时勾选「收藏」，AI 摘要会存到这里'
+          }
         />
       ) : null}
     </View>

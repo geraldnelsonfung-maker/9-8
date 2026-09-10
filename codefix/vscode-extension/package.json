@@ -1,0 +1,68 @@
+{
+  "name": "codefix",
+  "displayName": "CodeFix — 自动代码检查修复",
+  "description": "自用代码检查/自动修复助手：一键跑「检查→修复→验证」闭环，修复结果先隔离在 git 分支，确认后再合并。",
+  "version": "0.1.0",
+  "publisher": "geral-local",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Other"],
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "codefix.check",
+        "title": "CodeFix: 检查（只跑验证命令，不修改）"
+      },
+      {
+        "command": "codefix.fix",
+        "title": "CodeFix: 自动修复（检查→修复→验证）"
+      },
+      {
+        "command": "codefix.applyBranch",
+        "title": "CodeFix: 合并最近一次修复分支"
+      },
+      {
+        "command": "codefix.discardBranch",
+        "title": "CodeFix: 丢弃最近一次修复分支"
+      }
+    ],
+    "configuration": {
+      "title": "CodeFix",
+      "properties": {
+        "codefix.nodePath": {
+          "type": "string",
+          "default": "node",
+          "description": "node 可执行文件路径（如 D:\\\\Agent\\\\.tools\\\\node\\\\node.exe）"
+        },
+        "codefix.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "codefix CLI 入口（bin/codefix.js 的绝对路径）；留空则自动使用本插件同级目录下的 codefix 仓库"
+        },
+        "codefix.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "LLM API Key（DeepSeek 等 OpenAI 兼容服务）"
+        },
+        "codefix.baseUrl": {
+          "type": "string",
+          "default": "https://api.deepseek.com/v1",
+          "description": "LLM Base URL"
+        },
+        "codefix.model": {
+          "type": "string",
+          "default": "deepseek-chat",
+          "description": "LLM 模型名"
+        },
+        "codefix.gitPath": {
+          "type": "string",
+          "default": "",
+          "description": "git 可执行文件路径（本机 PATH 无 git 时填写）"
+        }
+      }
+    }
+  }
+}

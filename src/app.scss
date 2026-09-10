@@ -10,3 +10,75 @@ page {
   color: $color-text-primary;
   background-color: $color-bg-page;
 }
+
+// ============================================================
+// H5 响应式适配（主动适应分辨率；weapp 端 rpx 由框架自行换算，选择器不匹配即无副作用）
+// ------------------------------------------------------------
+// 1) rem 基准随视口线性缩放：适配区间 375~500px（375px 视口 → 18.75px），
+//    500px 封顶后不再放大（避免桌面端字体巨大）。
+//    注意：上限必须写大写 PX 逃逸 Taro pxtransform（小写 px 会被误转成 rem，
+//    而 rem 在 html 自身上按浏览器默认 16px 解析，导致根字号被压缩到 ~10.67px）
+//    !important 用于压过 Taro flexible 脚本对 html fontSize 的内联设置
+// ============================================================
+html {
+  font-size: calc(min(100vw, 500PX) / 20 * var(--ui-scale, 1)) !important;
+}
+
+@media (min-width: 500px) {
+  body {
+    background: #e9ebef;
+  }
+  // 页面内容限宽居中，大屏呈现为卡片
+  .taro-tabbar__panel {
+    max-width: 500PX !important;
+    margin: 0 auto !important;
+    box-shadow: 0 0 32rpx rgba(17, 24, 39, 0.1);
+  }
+  // 底部 TabBar 同步限宽居中
+  .taro-tabbar__tabbar {
+    max-width: 500PX !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+  }
+  // 页面内 fixed 元素（晨报输入栏等）同步限宽居中；宽度扣除浮岛左右边距
+  .h5Fixed {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%);
+    width: min(calc(100% - 32rpx), 468PX) !important;
+  }
+  // TabBar 选中文字色跟随主题色（图标为静态资源不随主题）
+  .taro-tabbar__tabbar .taro-tabbar__tab--active {
+    color: var(--brand, #ff7a45) !important;
+  }
+  // 页面首次载入淡入过渡
+  .taro-tabbar__panel {
+    animation: pageIn 0.24s ease-out;
+  }
+  @keyframes pageIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+// ============================================================
+// Taro H5 白屏兜底（重要，勿删）
+// ------------------------------------------------------------
+// 路由动画样式会把 .taro_page 平移到屏幕外（transform: translate(100%, 0)），
+// 需等 onLoad 回调注入 taro_page_show 类才滑回屏内；快速导航/慢环境下该回调
+// 存在竞态（Taro router/page.js 自带 FIXME：可能不执行回调导致白屏），输掉
+// 竞态即整页空白且 console 无任何报错。实测 Taro 4.1.9 的 h5.router.animation
+// 配置不生效（运行时读取顶层 config.animation），故此处直接用全局样式禁用
+// 屏外位移：页面栈显隐仍由 taro_page_shade(display:none) 正常控制，
+// 仅 H5 失去滑入过渡动画，小程序端不受影响。
+// ============================================================
+.taro_router > .taro_page {
+  transform: none !important;
+  transition: none !important;
+}

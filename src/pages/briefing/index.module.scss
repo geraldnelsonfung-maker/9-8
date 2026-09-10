@@ -160,6 +160,28 @@
   border-radius: $radius-sm;
   border: 2rpx solid $color-secondary;
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.checkboxDone {
+  background: var(--brand, $color-secondary);
+  border-color: var(--brand, $color-secondary);
+}
+
+.checkboxMark {
+  color: $color-text-white;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+}
+
+.todoInline {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  min-width: 0;
 }
 
 .todoTitle {
@@ -167,6 +189,11 @@
   font-size: $font-size-md;
   color: $color-text-primary;
   @include text-ellipsis;
+}
+
+.todoDone {
+  color: $color-text-disabled;
+  text-decoration: line-through;
 }
 
 .todoDue {
@@ -188,6 +215,13 @@
   color: $color-text-secondary;
   line-height: $line-height-loose;
   @include text-ellipsis-multi(2);
+}
+
+.aiGeneratedTag {
+  text-align: center;
+  font-size: $font-size-sm;
+  color: #999;
+  padding: 8rpx 0 4rpx;
 }
 
 .chatEmpty {
@@ -253,21 +287,83 @@
 
 .inputBar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: $spacing-md;
+  right: $spacing-md;
+  bottom: 16rpx; // 略抬离底部，不贴手势条/TabBar
   z-index: 700;
-  padding: $spacing-md $page-padding calc(#{$spacing-sm} + env(safe-area-inset-bottom));
+  padding: $spacing-sm $spacing-md;
   background: $color-bg-card;
+  border-radius: $radius-lg; // 浮岛造型
   box-shadow: $shadow-float;
   display: flex;
   flex-direction: column;
-  gap: $spacing-sm;
+  gap: $spacing-xs;
 }
 
-/* H5 预览端：避让底部 TabBar（微信端原生 TabBar 不占视口，无需处理） */
+/* H5 预览端：避让底部 TabBar（50px）并再上移一点 */
 .h5Fix {
-  bottom: calc(50px + env(safe-area-inset-bottom));
+  bottom: calc(66px + env(safe-area-inset-bottom));
+}
+
+.quickRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding-bottom: $spacing-xs;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.quickChip {
+  @include button-reset;
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  flex-shrink: 0;
+  height: 56rpx;
+  padding: 0 $spacing-md;
+  border-radius: $radius-round;
+  background: var(--brand-soft, #{$color-voice-bg});
+  color: $color-text-secondary;
+  font-size: $font-size-xs;
+  transition: all $transition-fast;
+
+  &:active {
+    transform: scale(0.96);
+    opacity: 0.85;
+  }
+}
+
+.quickChipIcon {
+  font-size: 26rpx;
+}
+
+.quickChipLabel {
+  font-weight: $font-weight-medium;
+}
+
+.clearButton {
+  @include button-reset;
+  width: 48rpx;
+  height: 48rpx;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-round;
+  background: $color-bg-page;
+  color: $color-text-tertiary;
+  font-size: $font-size-sm;
+  transition: all $transition-fast;
+
+  &:active {
+    background: $color-divider;
+  }
 }
 
 .inputRow {
@@ -292,14 +388,15 @@
 
 .sendButton {
   @include button-reset;
-  width: 140rpx; // 显式定宽：taro-button-core 默认 width:100% 会把 flex:1 的输入框挤成 0 宽
+  width: 124rpx; // 显式定宽：taro-button-core 默认 width:100% 会把 flex:1 的输入框挤成 0 宽
   flex-shrink: 0;
   height: $button-height-md;
-  border-radius: $radius-button;
-  background: var(--brand, #{$color-secondary});
+  border-radius: $radius-round;
+  background: var(--brand, $color-secondary);
   color: $color-text-white;
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
   font-weight: $font-weight-medium;
+  line-height: $button-height-md;
   transition: all $transition-fast;
 
   &:active {
@@ -310,13 +407,14 @@
 
 .modeButton {
   @include button-reset;
-  flex-shrink: 0;
+  width: 72rpx; // 显式定宽：taro-button-core 默认 width:100%
   height: $button-height-md;
-  padding: 0 $spacing-md;
+  min-width: 72rpx;
+  flex-shrink: 0;
   border-radius: $radius-button;
   background: $color-bg-page;
   color: $color-text-secondary;
-  font-size: $font-size-sm;
+  font-size: 32rpx;
   white-space: nowrap;
   transition: all $transition-fast;
 

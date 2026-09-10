@@ -1,7 +1,54 @@
 /** mock: chat —— 模拟语音/文字对话意图处理（deep=true 时为深度思考伙伴模式） */
-export default function chat(data?: { message?: string; action?: string; deep?: boolean }) {
+import Taro from '@tarojs/taro';
+import dayjs from 'dayjs';
+import type { ScheduleEvent, TodoItem } from '../types';
+import { readPlan, writePlan, nextId } from './dailyPlan';
+
+const SHOPPING_STORAGE_KEY = 'shoppingList';
+
+interface MockPrice {
+  platform: string;
+  price: number;
+}
+interface MockShoppingItem {
+  id: string;
+  name: string;
+  targetPrice?: number;
+  link?: string;
+  bought: boolean;
+  createdAt: string;
+  prices: MockPrice[];
+}
+
+function readShoppingList(): MockShoppingItem[] {
+  try {
+    return Taro.getStorageSync(SHOPPING_STORAGE_KEY) || [];
+  } catch (err) {
+    console.warn('[mock:chat] read shopping failed:', err);
+    return [];
+  }
+}
+function writeShoppingList(list: MockShoppingItem[]) {
+  try {
+    Taro.setStorageSync(SHOPPING_STORAGE_KEY, list);
+  } catch (err) {
+    console.warn('[mock:chat] write shopping failed:', err);
+  }
+}
+
+export default function chat(data?: {
+  message?: string;
+  action?: string;
+  deep?: boolean;
+  mode?: 'work';
+  workAction?: string;
+}) {
   const msg = (data?.message || '').trim();
-  console.info('[mock:chat] message:', msg, 'deep:', data?.deep);
+  console.info('[mock:chat] message:', msg, 'deep:', data?.deep, 'mode:', data?.mode);
+
+  if (data?.mode === 'work') {
+    return workAssistant(msg, data.workAction || 'summary');
+  }
 
   if (data?.deep) {
     return {
@@ -17,9 +64,329 @@ export default function chat(data?: { message?: string; action?: string; deep?: 
   }
 
   let reply = '好的，已收到你的指令。';
-  if (/改|挪|推迟/.test(msg)) reply = '已把「产品评审会」改期到明天 14:00，并在晨报中更新。';
-  else if (/完成|办完|搞定了/.test(msg)) reply = '太棒了，「回复客户邮件」已标记完成。';
-  else if (/今天|日程|安排/.test(msg)) reply = '你今天有 1 个日程：10:00 产品评审会（3 号会议室）；2 个待办，最早 9:00 前更新演示文稿。';
+  if (/帮我安排|排一下|帮我约|重新排|排班/.test(msg))
+    reply =
+      '我对照了你的日程：周五 14:00-16:00 有「和设计师对齐视觉稿」，你说的会建议排到 16:30-17:30，刚好留出缓冲。\n回复「确认」我就写入日程，或告诉我别的时段。';
+  else if (/确认|就这么排/.test(msg)) reply = '已写入日程：本周五 16:30-17:30，晨报会同步更新。';
   else if (/取消|算了/.test(msg)) reply = '已取消该操作。';
+  // 购物清单操作：读 / 添加 / 标记已买（意图词具体，须排在宽泛的日程查询之前，
+  // 否则「购物清单里有什么」会被日程查询的「有什么」抢先命中）
+  else if (matchShopList(msg)) {
+    reply = handleShoppingList(msg);
+  }
+  else if (matchDailyPlan(msg)) {
+    // 对话式增改删查：优先命中「新增/完成/删除/改期/查询待办与日程」
+    reply = handleDailyPlan(msg);
+  }
+  // 购物分析：识别「买 / 对比 / 哪个划算 / 值不值」等意图
+  else if (matchShopping(msg)) {
+    reply = shoppingAnalyze(msg);
+  }
   return { reply, action: 'none' };
+}
+
+/** 购物相关关键词命中 */
+function matchShopping(msg: string): boolean {
+  return /买|购买|入手|比一比|对比|哪个.划算|划算|值不值|值不值得|性价比|什么牌子|求推荐|预算|买什么/.test(msg);
+}
+
+/** 对话式增改删查是否命中（新增/完成/删除/改期/查询待办与日程） */
+function matchDailyPlan(msg: string): boolean {
+  return (
+    /加入(?:待办|日程)|加个(?:待办|日程)|新增(?:待办|日程)|记(?:待办|日程)/.test(msg) ||
+    /标记(?:为)?完成|办完|搞定|完成/.test(msg) ||
+    /删掉|删除|去掉|移除|撤销/.test(msg) ||
+    /改到|挪到|改期|推迟|延后|提前/.test(msg) ||
+    /(?:待办|日程|安排|日程表|有什么)/.test(msg)
+  );
+}
+
+/** 把用户表达的时间词解析为 'YYYY-MM-DD HH:mm'；解析失败返回 null */
+function parsePlanTime(text: string): string | null {
+  const now = dayjs();
+  const today = now.format('YYYY-MM-DD');
+
+  const md = text.match(/(\d{1,2})月(\d{1,2})日?[^\d]{0,6}(\d{1,2})[:：点][^\d]{0,2}(\d{1,2})?/);
+  if (md) {
+    const mo = md[1], dd = md[2], hh = md[3];
+    const mm = md[4] ? String(md[4]).padStart(2, '0') : '00';
+    return dayjs(`${now.year()}-${mo}-${dd} ${hh}:${mm}`).format('YYYY-MM-DD HH:mm');
+  }
+
+  const rel = text.match(/(今晚|明天|明晚|后天|上午|中午|下午|晚上)?\s*(\d{1,2})\s*[:：点](\d{1,2})?\s*(点半|半|分)?/);
+  if (rel) {
+    const kw = rel[1];
+    let dayOffset = 0;
+    if (kw === '明天' || kw === '明晚') dayOffset = 1;
+    else if (kw === '后天') dayOffset = 2;
+    let hh = Number(rel[2]);
+    if (['下午', '晚上', '明晚', '今晚'].includes(kw || '') && hh < 12) hh += 12;
+    const mm = rel[5] === '半' ? 30 : Number(rel[3] || '0');
+    return now.add(dayOffset, 'day').hour(hh).minute(mm).format('YYYY-MM-DD HH:mm');
+  }
+
+  const hm = text.match(/(\d{1,2})[:：](\d{2})/);
+  if (hm) return dayjs(`${today} ${hm[1]}:${hm[2]}`).format('YYYY-MM-DD HH:mm');
+
+  return null;
+}
+
+/** 对话式增改删查：新增 / 完成 / 删除 / 改期 / 查询 待办与日程 */
+function handleDailyPlan(msg: string): string {
+  const plan = readPlan();
+  const today = dayjs().format('YYYY-MM-DD');
+
+  // 1) 新增：把「XX」加入/记入 待办或日程
+  const addMatch = msg.match(/把?([\u4e00-\u9fa5A-Za-z0-9（）()]{1,20}?)(?:加(?:入|进)|新增|记入|加个)(待办|日程)/);
+  if (addMatch) {
+    const title = addMatch[1].trim();
+    if (!title) return '想让我把你的哪件事加进待办或日程？说一下内容就行。';
+    const isEvent = addMatch[2] === '日程';
+    const t = parsePlanTime(msg) || `${today} ${isEvent ? '19:00' : '09:00'}`;
+    if (isEvent) {
+      const evt: ScheduleEvent = {
+        id: nextId('evt'),
+        title,
+        startTime: t,
+        status: 'confirmed',
+        source: 'AI 新增'
+      };
+      plan.events.push(evt);
+      writePlan(plan);
+      return `📅 已把「${title}」排入日程（${t}），晨报会同步。`;
+    }
+    const todo: TodoItem = { id: nextId('todo'), title, dueDate: t, status: 'confirmed', source: 'AI 新增' };
+    plan.todos.unshift(todo);
+    writePlan(plan);
+    return `✅ 已把「${title}」加进待办（${t}）。`;
+  }
+
+  // 2) 完成：把「XX」标记完成 / 完成XX
+  const doneMatch = msg.match(/(?:把)?[「」]?([\u4e00-\u9fa5A-Za-z0-9（）()]{2,20})[」]?(?:标记)?(?:为)?完成/);
+  if (doneMatch) {
+    const kw = doneMatch[1];
+    const hit = plan.todos.find((t) => t.status !== 'done' && t.title.includes(kw));
+    if (hit) {
+      hit.status = 'done';
+      writePlan(plan);
+      return `🎉 已把「${hit.title}」标记完成。`;
+    }
+    return `我没找到匹配「${kw}」的未完成待办。`;
+  }
+
+  // 3) 删除：删掉/删除/去掉「XX」
+  const delMatch = msg.match(/(?:删掉|删除|去掉|移除|撤销)\s*[「」]?([\u4e00-\u9fa5A-Za-z0-9（）()]{2,20})/);
+  if (delMatch) {
+    const kw = delMatch[1];
+    const tHit = plan.todos.find((t) => t.title.includes(kw));
+    if (tHit) {
+      plan.todos = plan.todos.filter((t) => t.id !== tHit.id);
+      writePlan(plan);
+      return `🗑️ 已删除待办「${tHit.title}」。`;
+    }
+    const eHit = plan.events.find((e) => e.title.includes(kw));
+    if (eHit) {
+      plan.events = plan.events.filter((e) => e.id !== eHit.id);
+      writePlan(plan);
+      return `🗑️ 已删除日程「${eHit.title}」。`;
+    }
+    return `没找到「${kw}」，无需删除。`;
+  }
+
+  // 4) 改期：把「XX」挪到/改到/推迟到 时间
+  const moveMatch = msg.match(/把?[「」]?([\u4e00-\u9fa5A-Za-z0-9（）()]{2,20})[」]?\s*(?:改到|挪到|改期|推迟|延后|提前)\s*(.{0,12})/);
+  if (moveMatch) {
+    const kw = moveMatch[1];
+    const target = parsePlanTime(moveMatch[2] || '明天 19:00');
+    const hit =
+      plan.events.find((e) => e.title.includes(kw) && dayjs(e.startTime).isSame(today, 'day')) ||
+      plan.todos.find((t) => t.title.includes(kw) && t.status !== 'done') ||
+      plan.events.find((e) => e.title.includes(kw));
+    if (hit) {
+      if ('startTime' in hit) hit.startTime = target || hit.startTime;
+      else hit.dueDate = target || hit.dueDate;
+      writePlan(plan);
+      return `🕒 已把「${hit.title}」改期到 ${target}，晨报已更新。`;
+    }
+    return `没找到「${kw}」，检查下是不是名称对不上？`;
+  }
+
+  // 5) 查询：列出待办与日程
+  const undone = plan.todos.filter((t) => t.status !== 'done');
+  const hasEvents = plan.events.length > 0;
+  if (hasEvents || undone.length > 0 || plan.todos.length > 0) {
+    const evtLines = plan.events.map((e) => `· ${e.startTime.replace(' ', ' ')}  ${e.title}${e.location ? `（${e.location}）` : ''}`);
+    const todoLines = plan.todos.map((t) => `· ${t.status === 'done' ? '✅' : '⬜'} ${t.title}${t.dueDate ? `（${t.dueDate.replace(' ', ' ')}）` : ''}`);
+    return [
+      '🗓️ 今日安排：',
+      ...(evtLines.length ? ['【日程】', ...evtLines] : []),
+      ...(todoLines.length ? ['【待办】', ...todoLines] : []),
+      '',
+      '说「把XX标记完成」「把XX挪到明天下午3点」我就能帮你改。'
+    ].join('\n');
+  }
+  return '你今天还没有日程和待办。说「把周末练瑜伽加进待办」我帮你记。';
+}
+
+/** 购物清单操作意图命中：读清单 / 添加 / 标记已买 */
+function matchShopList(msg: string): boolean {
+  return (
+    /购物清单|清单/.test(msg) &&
+    (/(有|看|展示|列|查|显示|还剩|还有什么)/.test(msg) ||
+      /(把|将|加|加入|添加|记下)/.test(msg) ||
+      /买|已买|入手|搞定/.test(msg))
+  );
+}
+
+/** 处理购物清单的读 / 加 / 勾买指令 */
+function handleShoppingList(msg: string): string {
+  const list = readShoppingList();
+  // 把「XX」加进购物清单：商品名尽量短，动作词「加入/加进/添加到」必需，避免把动词吞进商品名
+  const addMatch = msg.match(/把?([\u4e00-\u9fa5A-Za-z0-9（）()]{1,16}?)(?:加(?:入|进)|添加到|加到|记入)购物清单/);
+  const notBought = list.filter((it) => !it.bought);
+
+  // 1) 添加指令：把「XX」加进购物清单 / 购物清单加XX
+  if (addMatch && /加|添加|记/.test(msg)) {
+    const name = addMatch[1];
+    const item: MockShoppingItem = {
+      id: `shop-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name,
+      bought: false,
+      createdAt: new Date().toISOString(),
+      prices: []
+    };
+    writeShoppingList([item, ...list]);
+    return `✅ 已把「${name}」加进购物清单。需要的话说「帮我看下购物清单」就能展示，也可以去「我的 → 购物清单」记比价。`;
+  }
+
+  // 2) 标记已买：把「XX」标记为已买
+  const doneMatch = msg.match(/(?:把)?\s*([\u4e00-\u9fa5A-Za-z0-9（）()]{2,16})\s*(?:标记)?(?:为)?已买/);
+  if (doneMatch) {
+    const name = doneMatch[1];
+    const hit = notBought.find((it) => it.name.includes(name));
+    if (hit) {
+      writeShoppingList(list.map((it) => (it.id === hit.id ? { ...it, bought: true } : it)));
+      return `🎉 已把「${hit.name}」标记为已买，为你记账。`;
+    }
+    return `清单里没找到「${name}」。你可以说「把${name}加进购物清单」添加。`;
+  }
+
+  // 3) 读取清单
+  if (notBought.length === 0) {
+    const bought = list.filter((it) => it.bought).length;
+    return list.length === 0
+      ? '🛒 购物清单还是空的。说「把XX加进购物清单」就能添加想买的东西。'
+      : `🛒 你清单里 ${bought} 件都已买了，没有待购的。要加新的就说「把XX加进购物清单」。`;
+  }
+  const lines = [
+    `🛒 你购物清单里还有 ${notBought.length} 件待购：`,
+    ...notBought.map((it, i) => {
+      const cheapest = it.prices.length
+        ? `（已比价，最低￥${Math.min(...it.prices.map((p) => p.price))}）`
+        : it.targetPrice
+        ? `（目标 ￥${it.targetPrice}，未比价）`
+        : '（未比价）';
+      return `${i + 1}. ${it.name} ${cheapest}`;
+    })
+  ];
+  lines.push('\n需要的话我可以帮其中某件做比价分析，或说「把XX标记已买」。');
+  return lines.join('\n');
+}
+
+/**
+ * 购物分析（模拟「联网查价对比」）：
+ * 真实联网需接入搜索 API + 部署云函数，当前预览端用示例形态演示。
+ */
+function shoppingAnalyze(msg: string): string {
+  const item = (msg.match(/买[:：]?\s*([\u4e00-\u9fa5A-Za-z0-9（）()]{2,12})/) || [])[1] || '该商品';
+  const budget = (msg.match(/预算[^0-9]{0,3}(\d+)/) || [])[1] || null;
+  const rows = [
+    ['京东自营', '￥2,899', '★★★★☆', '次日达 · 官方售后'],
+    ['天猫官方旗舰', '￥2,949', '★★★★☆', '赠品较多 · 7天无理由'],
+    ['拼多多百亿补贴', '￥2,659', '★★★☆☆', '价格最低 · 需蹲券'],
+    ['实体线下门店', '￥3,099', '★★★★★', '可上手体验 · 报价可谈']
+  ];
+  const cheapest = rows.reduce((a, b) => {
+    const p = (s: string) => Number(s.replace(/[^\d]/g, ''));
+    return p(a[1]) < p(b[1]) ? a : b;
+  });
+  const lines = [
+    `🔍 正在联网对比「${item}」各大平台价格与口碑…`,
+    '',
+    '📊 平台对比（模拟示例数据）',
+    ...rows.map((r) => `${r[0]}  ${r[1]}  ${r[2]}  ${r[3]}`),
+    '',
+    `✅ 分析结论：当前最低价是 ${cheapest[0]}（${cheapest[1]}），适合预算敏感的入手。`
+  ];
+  if (budget) {
+    const b = Number(budget);
+    lines.push(`\n按你 ${budget} 元预算看，${rows.every((r) => b < Number(r[1].replace(/[^\d]/g, ''))) ? '各平台都超了预算，建议加一点预算或换个型号。' : '首选在预算内 + 售后好的那一档。'}`);
+  }
+  lines.push(
+    '\n💡 需要的话我可以：1) 把它加进购物清单跟进降价  2) 换个价格区间继续比。',
+    '（提示：预览端为参考估算；真机端已支持联网实时查价）'
+  );
+  return lines.join('\n');
+}
+
+/** 工作助手（模拟）：对粘贴内容做总结 / 提取要点 / 给建议 */
+function workAssistant(content: string, workAction: string): { reply: string; action: string } {
+  if (!content) {
+    return { reply: '请先粘贴要分析的工作内容（报告、会议记录、邮件、方案均可）。', action: 'chat' };
+  }
+  // 从内容中抽取「关键信息」让模拟结果有真实感：句子、数字、时间、人名样式的词
+  const sentences = content
+    .split(/[。！？；\n]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 6);
+  const pick = (i: number) => sentences[i % Math.max(sentences.length, 1)] || '（相关内容）';
+  const keyFacts = content.match(/[\d,.\d]+[%万亿元天分钟小时个月周]|Q[1-4]|周[一二三四五六日]|\d{1,2}[月日]\d{0,2}[日号]?/g) || [];
+  const factsLabel = keyFacts.length > 0 ? `内容里的关键数据：${keyFacts.slice(0, 5).join('、')}` : '内容以描述性信息为主，没有明显数据。';
+
+  if (workAction === 'points') {
+    const lines = [
+      '📌 提取的关键要点：',
+      '',
+      ...sentences.slice(0, 5).map((s, i) => `${i + 1}. ${s.slice(0, 40)}${s.length > 40 ? '…' : ''}`),
+      '',
+      factsLabel,
+      '',
+      '（预览端为模拟提取，正式版由大模型逐句精炼）'
+    ];
+    return { reply: lines.join('\n'), action: 'chat' };
+  }
+
+  if (workAction === 'advice') {
+    const lines = [
+      '💡 内容亮点：',
+      `这份材料整体结构清晰，${pick(0).slice(0, 24)}…部分信息量最大。`,
+      '',
+      '给你 3 条建议：',
+      `1. ${keyFacts.length > 0 ? '把散落的数字（' + keyFacts.slice(0, 3).join('、') + '）整理成一张对照表，汇报时更有说服力' : '给每个部分加一句「结论先行」的标题，读者 10 秒能抓住重点'}；`,
+      `2. 「${pick(1).slice(0, 16)}…」这部分建议补充下一步责任人和截止时间，避免议而不决；`,
+      '3. 结尾加一段「风险与需要的支持」，向上汇报时更容易拿到资源。',
+      '',
+      '（预览端为模拟建议，正式版由大模型结合内容深度分析）'
+    ];
+    return { reply: lines.join('\n'), action: 'chat' };
+  }
+
+  // summary
+  const lines = [
+    '✍️ 内容总结',
+    '',
+    '【背景】',
+    pick(0).slice(0, 40) + (pick(0).length > 40 ? '…' : ''),
+    '',
+    '【关键要点】',
+    `· ${pick(1).slice(0, 30)}…`,
+    `· ${pick(2).slice(0, 30)}…`,
+    `· ${factsLabel}`,
+    '',
+    '【结论与行动项】',
+    `· 内容核心围绕「${content.slice(0, 12)}…」展开，建议优先处理上面第 1 条要点相关事项。`,
+    '',
+    '（预览端为模拟总结，正式版由大模型生成）'
+  ];
+  return { reply: lines.join('\n'), action: 'chat' };
 }

@@ -1,12 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, Input, Picker, Button, Image } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import { View, Text, Picker, Button, Image, Input, Switch, ScrollView } from '@tarojs/components';
+import Taro, { useDidShow } from '@tarojs/taro';
 import classnames from 'classnames';
 import { useUserStore } from '@/store/user';
 import { brandVars, useThemeStore, THEME_PRESETS } from '@/store/theme';
-import { apiCreateOrder } from '@/services/api';
+import { useUiScaleStore, UI_SCALE_PRESETS } from '@/store/uiScale';
+import { useT, useLanguageStore, LANG_OPTIONS } from '@/store/language';
+import type { LangKey } from '@/store/language';
+import { apiCreateOrder, apiDeleteAccount } from '@/services/api';
+import { fromNow } from '@/utils/date';
+import { getActivityLogs } from '@/utils/activityLog';
+import type { ActivityLogItem } from '@/utils/activityLog';
 import type { PayOrder } from '@/types';
 import styles from './index.module.scss';
+
+const isWeapp = process.env.TARO_ENV === 'weapp';
+const isH5 = process.env.TARO_ENV === 'h5';
+const AVATAR_KEY = 'user-avatar';
+/** H5 预览端可选的预设头像 */
+const AVATAR_PRESETS = ['🌅', '🌞', '🌱', '🐳', '🦊', '🐼'];
 
 const PLAN_LIST: Array<{ id: PayOrder['planId']; label: string }> = [
   { id: 'earlybird_monthly', label: '早鸟月付' },
@@ -14,28 +26,130 @@ const PLAN_LIST: Array<{ id: PayOrder['planId']; label: string }> = [
   { id: 'yearly', label: '年付' }
 ];
 
-const isWeapp = process.env.TARO_ENV === 'weapp';
-const AVATAR_KEY = 'user-avatar';
-/** H5 预览端可选的预设头像 */
-const AVATAR_PRESETS = ['🌅', '🌞', '🌱', '🐳', '🦊', '🐼'];
+/** 存储值保持中文，展示时按当前语言翻译 */
+const PLAN_LABEL_KEY: Record<string, LangKey> = {
+  earlybird_monthly: 'mine.planEarlyBird',
+  monthly: 'mine.planMonthly',
+  yearly: 'mine.planYearly'
+};
+
+const PREF_TAG_LABEL: Record<string, LangKey> = {
+  '科技': 'mine.prefTech',
+  '效率工具': 'mine.prefProductivity',
+  '财经': 'mine.prefFinance',
+  '健康': 'mine.prefHealth',
+  '出行': 'mine.prefTravel',
+  '生活': 'mine.prefLife',
+  'AI': 'mine.prefAi'
+};
+
+const REPLY_STYLE_LABEL: Record<string, LangKey> = {
+  '简洁': 'mine.replyConcise',
+  '均衡': 'mine.replyBalanced',
+  '详细': 'mine.replyDetailed'
+};
+
+const UI_SCALE_LABEL: Record<string, LangKey> = {
+  small: 'mine.uiSizeSmall',
+  standard: 'mine.uiSizeStandard',
+  large: 'mine.uiSizeLarge',
+  xlarge: 'mine.uiSizeXlarge'
+};
+
 /** TODO：上线前在小程序后台绑定企业微信客服后替换 */
 const SERVICE_CORP_ID = 'TODO_CORP_ID';
+
+const PREF_TAGS = ['科技', '效率工具', '财经', '健康', '出行', '生活', 'AI'];
+const REPLY_STYLES = ['简洁', '均衡', '详细'];
+const CUSTOM_SETTINGS_KEY = 'user-settings';
+const AI_MEMORY_KEY = 'ai-memory';
+
+const AI_MEMORY_SEED = [
+  '称呼偏好：喜欢被叫「晨友」',
+  '起床习惯：工作日 7:00 起，晨报偏好 7:30 推送',
+  '常搜内容：效率工具、行业资讯',
+  '沟通偏好：回复偏简洁，先给结论'
+];
+
+const TERMS_TEXT = `《用户服务协议》（正式版上线前将在此替换为完整法务文本）
+1. 本小程序为你提供消息整理、日程待办管理与晨报服务。
+2. 你转发的内容仅用于生成你的日程、待办与摘要，存储于境内服务器。
+3. 免费版含基础额度，订阅后解锁更多额度，订阅可随时取消。
+4. 你可随时在「我的-注销账号」删除全部数据。`;
+
+const PRIVACY_TEXT = `《隐私政策》（正式版上线前将在此替换为完整法务文本）
+1. 我们收集：你主动转发的消息/图片、对话录音（仅识别用）、设备标识（openid）。
+2. 我们不收集：你的微信聊天记录（平台禁止，转发是唯一入口）、通讯录、位置。
+3. 浏览历史仅保存在你的手机本地，可一键清空。
+4. 数据用于生成晨报与改善服务，不用于对外共享或训练公开模型。
+5. 你可在「我的-注销账号」一键删除全部数据。`;
+
+const AI_SERVICES_TEXT = `《第三方 AI 服务说明》
+1. 本小程序的部分智能功能（含晨报摘要、内容整理、购物比价、AI 对话等）调用第三方大模型服务（如 DeepSeek、通义千问等）处理你的输入，再返回结果给你。
+2. 上述第三方服务可能接触到你主动输入的内容；我们仅调用其 API 生成回复，不会把内容用于对外共享或训练公开模型。
+3. 第三方服务商的网络、算力与安全由其自身负责，我们会在能力范围内做好内容过滤与标识。
+4. AI 生成内容仅供参考，不构成专业（医疗、法律、金融等）建议，重要决策请以官方或专业人士信息为准。`;
+
+interface CustomSettings {
+  replyStyle: string;
+  newsEnabled: boolean;
+  morningReminderEnabled: boolean;
+}
+
+const DEFAULT_CUSTOM: CustomSettings = {
+  replyStyle: '均衡',
+  newsEnabled: true,
+  morningReminderEnabled: true
+};
+
+function loadCustom(): CustomSettings {
+  try {
+    return { ...DEFAULT_CUSTOM, ...(Taro.getStorageSync(CUSTOM_SETTINGS_KEY) || {}) };
+  } catch (err) {
+    return DEFAULT_CUSTOM;
+  }
+}
 
 function MinePage() {
   const { profile, usage, init, saveSettings } = useUserStore();
   const { theme, setTheme } = useThemeStore();
-  const [nickname, setNickname] = useState('');
+  const { id: scaleId, setScale } = useUiScaleStore();
+  const t = useT();
+  const { lang, setLang } = useLanguageStore();
   const [planId, setPlanId] = useState<PayOrder['planId']>('earlybird_monthly');
   const [paying, setPaying] = useState(false);
   const [avatar, setAvatar] = useState('');
+  const [logs, setLogs] = useState<ActivityLogItem[]>([]);
+  // 设置项（自独立设置页合并而来）
+  const [nickname, setNickname] = useState('');
+  const [prefs, setPrefs] = useState<string[]>([]);
+  const [custom, setCustom] = useState<CustomSettings>(DEFAULT_CUSTOM);
+  const [memory, setMemory] = useState<string[]>([]);
+  const [docView, setDocView] = useState<'terms' | 'privacy' | 'ai' | null>(null);
 
   useEffect(() => {
     init();
   }, []);
 
+  // profile 就绪后回填设置项 + 读取本地自定义设置/AI 记忆
   useEffect(() => {
-    if (profile) setNickname(profile.nickname);
+    if (profile) {
+      setNickname(profile.nickname);
+      setPrefs(profile.preferences || []);
+    }
+    setCustom(loadCustom());
+    try {
+      const saved = Taro.getStorageSync(AI_MEMORY_KEY);
+      setMemory(Array.isArray(saved) && saved.length ? saved : AI_MEMORY_SEED);
+    } catch (err) {
+      setMemory(AI_MEMORY_SEED);
+    }
   }, [profile]);
+
+  // 每次切回「我的」页刷新近期动态（最新 3 条）
+  useDidShow(() => {
+    setLogs(getActivityLogs().slice(0, 3));
+  });
 
   // 恢复本地头像（微信端为本地/临时图片路径，H5 端为 emoji）
   useEffect(() => {
@@ -47,7 +161,7 @@ function MinePage() {
     }
   }, []);
 
-  const handleChangeAvatar = () => {
+  const doChangeAvatar = () => {
     if (isWeapp) {
       Taro.chooseMedia({
         count: 1,
@@ -76,32 +190,14 @@ function MinePage() {
     }
   };
 
-  const handleContactService = () => {
-    const fallback = () => {
-      Taro.showModal({
-        title: '联系客服',
-        content: '工作时间 9:00-21:00\n微信搜索公众号「私人晨报助理」留言\n或发邮件至 support@morningbrief.cn',
-        confirmText: '知道了',
-        showCancel: false
-      });
-    };
-    if (isWeapp) {
-      // openCustomerServiceChat 需要企业微信客服绑定（TODO_CORP_ID 上线前替换）
-      const openChat = (Taro as unknown as { openCustomerServiceChat?: (opt: Record<string, unknown>) => void })
-        .openCustomerServiceChat;
-      if (typeof openChat === 'function') {
-        try {
-          openChat({ corpId: SERVICE_CORP_ID, extInfo: { url: '' }, fail: fallback });
-        } catch (err) {
-          console.warn('[MinePage] openCustomerServiceChat failed:', err);
-          fallback();
-        }
-      } else {
-        fallback();
-      }
-    } else {
-      fallback();
-    }
+  /** 点头像：更换头像 或 查看浏览历史（v2.0 F26） */
+  const handleAvatarTap = () => {
+    Taro.showActionSheet({ itemList: ['更换头像', '浏览历史'] })
+      .then((res) => {
+        if (res.tapIndex === 0) doChangeAvatar();
+        else if (res.tapIndex === 1) Taro.navigateTo({ url: '/pages/history/index' });
+      })
+      .catch(() => {});
   };
 
   const isEmojiAvatar = (val: string) => val.length <= 4;
@@ -117,17 +213,6 @@ function MinePage() {
     if (usage.collectionQuota < 0) return 0;
     return Math.min(100, Math.round((usage.collectionCount / usage.collectionQuota) * 100));
   }, [usage]);
-
-  const handleChangeTime = (e) => {
-    const value = e.detail.value as string;
-    saveSettings({ briefingTime: value });
-  };
-
-  const handleBlurNickname = () => {
-    const name = nickname.trim();
-    if (!profile || !name || name === profile.nickname) return;
-    saveSettings({ nickname: name });
-  };
 
   const handleSubscribe = async () => {
     if (paying) return;
@@ -149,10 +234,136 @@ function MinePage() {
     }
   };
 
+  // ===== 设置项处理（自独立设置页合并而来） =====
+  const memorySummary = useMemo(() => t('mine.memoryCount', { n: memory.length }), [memory, t]);
+
+  const persistCustom = (patch: Partial<CustomSettings>) => {
+    const next = { ...custom, ...patch };
+    setCustom(next);
+    try {
+      Taro.setStorageSync(CUSTOM_SETTINGS_KEY, next);
+    } catch (err) {
+      console.error('[MinePage] persist custom failed:', err);
+    }
+  };
+
+  const handleBlurNickname = () => {
+    const name = nickname.trim();
+    if (!profile || !name || name === profile.nickname) return;
+    saveSettings({ nickname: name });
+  };
+
+  const handleChangeTime = (e) => {
+    saveSettings({ briefingTime: e.detail.value as string });
+  };
+
+  const handleTogglePref = (tag: string) => {
+    const next = prefs.includes(tag) ? prefs.filter((t) => t !== tag) : [...prefs, tag].slice(0, 5);
+    setPrefs(next);
+    saveSettings({ preferences: next });
+  };
+
+  const handleReplyStyle = (e) => {
+    const idx = Number(e.detail.value);
+    persistCustom({ replyStyle: REPLY_STYLES[idx] || '均衡' });
+  };
+
+  const handleClearMemory = () => {
+    Taro.showModal({
+      title: '清空 AI 记忆',
+      content: '助理将忘记你的习惯与偏好（不影响日程和待办数据）。',
+      confirmText: '清空',
+      confirmColor: '#E85D2A',
+      success: (res) => {
+        if (res.confirm) {
+          try {
+            Taro.setStorageSync(AI_MEMORY_KEY, []);
+          } catch (err) {
+            console.error('[MinePage] clear memory failed:', err);
+          }
+          setMemory([]);
+          Taro.showToast({ title: '已清空，将重新学习', icon: 'success' });
+        }
+      }
+    });
+  };
+
+  const handleOpenPrivacyManage = () => {
+    const openPrivacyContract = (Taro as unknown as { openPrivacyContract?: (opt?: Record<string, unknown>) => Promise<unknown> })
+      .openPrivacyContract;
+    if (isWeapp && typeof openPrivacyContract === 'function') {
+      openPrivacyContract
+        .call(Taro, {})
+        .catch(() => Taro.showToast({ title: '请在微信「设置-隐私」中管理授权', icon: 'none' }));
+    } else {
+      Taro.showToast({ title: '微信端可管理隐私授权', icon: 'none' });
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Taro.showModal({
+      title: '注销账号',
+      content: '将永久删除你的日程、待办、收藏与全部个人数据，此操作不可恢复。确定继续？',
+      confirmText: '确认注销',
+      confirmColor: '#E85D2A',
+      success: (res) => {
+        if (!res.confirm) return;
+        apiDeleteAccount()
+          .then(() => {
+            try {
+              Taro.clearStorageSync();
+            } catch (err) {
+              console.error('[MinePage] clear storage failed:', err);
+            }
+            Taro.showToast({ title: '已注销，数据已删除', icon: 'success' });
+            setTimeout(() => Taro.reLaunch({ url: '/pages/briefing/index' }), 1200);
+          })
+          .catch((err) => {
+            console.error('[MinePage] deleteAccount failed:', err);
+            Taro.showToast({ title: '注销失败，请稍后再试', icon: 'none' });
+          });
+      }
+    });
+  };
+
+  const handleContactService = () => {
+    const fallback = () => {
+      Taro.showModal({
+        title: '联系客服',
+        content: '工作时间 9:00-21:00\n微信搜索公众号「私人晨报助理」留言\n或发邮件至 support@morningbrief.cn',
+        confirmText: '知道了',
+        showCancel: false
+      });
+    };
+    if (isWeapp) {
+      const openChat = (Taro as unknown as { openCustomerServiceChat?: (opt: Record<string, unknown>) => void })
+        .openCustomerServiceChat;
+      if (typeof openChat === 'function') {
+        try {
+          openChat({ corpId: SERVICE_CORP_ID, extInfo: { url: '' }, fail: fallback });
+        } catch (err) {
+          console.warn('[MinePage] openCustomerServiceChat failed:', err);
+          fallback();
+        }
+      } else {
+        fallback();
+      }
+    } else {
+      fallback();
+    }
+  };
+
+  const renderRow = (label: string, valueNode: React.ReactNode, onClick?: () => void) => (
+    <View className={styles.row} onClick={onClick}>
+      <Text className={styles.rowLabel}>{label}</Text>
+      <View className={styles.rowValue}>{valueNode}</View>
+    </View>
+  );
+
   return (
     <View className={styles.page} style={brandVars(theme)}>
       <View className={styles.userCard}>
-        <Button className={styles.avatarBtn} onClick={handleChangeAvatar}>
+        <Button className={styles.avatarBtn} onClick={handleAvatarTap}>
           <View className={styles.avatar}>
             {avatar ? (
               isEmojiAvatar(avatar) ? (
@@ -164,34 +375,32 @@ function MinePage() {
               <Text className={styles.avatarText}>🌅</Text>
             )}
           </View>
-          <Text className={styles.avatarEdit}>改头像</Text>
+          <Text className={styles.avatarEdit}>{t('mine.avatarEdit')}</Text>
         </Button>
         <View className={styles.userBody}>
           <Text className={styles.nickname}>{profile?.nickname || '晨友'}</Text>
           <Text className={styles.userMeta}>
             {profile?.subscribed && profile?.expiredAt
               ? `订阅至 ${profile.expiredAt.slice(0, 10)}`
-              : '免费版用户'}
+              : t('mine.freeUser')}
           </Text>
         </View>
         {profile?.subscribed ? (
           <View className={styles.subBadge}>
             <Text className={styles.subBadgeText}>
-              {profile.isEarlyBird ? '早鸟会员' : '订阅会员'}
+              {profile.isEarlyBird ? t('mine.earlyBirdBadge') : t('mine.memberBadge')}
             </Text>
           </View>
         ) : null}
       </View>
 
       <View className={styles.subCard}>
-        <Text className={styles.subTitle}>订阅私人晨报助理</Text>
-        <Text className={styles.subDesc}>
-          语音晨报不限次畅聊 · 收藏无限量 · 习惯记忆主动调整晨报 · 新功能优先体验
-        </Text>
+        <Text className={styles.subTitle}>{t('mine.subTitle')}</Text>
+        <Text className={styles.subDesc}>{t('mine.subDesc')}</Text>
         <View className={styles.subActions}>
           <Picker
             mode='selector'
-            range={PLAN_LIST.map((p) => p.label)}
+            range={PLAN_LIST.map((p) => t(PLAN_LABEL_KEY[p.id]))}
             value={PLAN_LIST.findIndex((p) => p.id === planId)}
             onChange={(e) => setPlanId(PLAN_LIST[Number(e.detail.value)].id)}
           >
@@ -199,24 +408,24 @@ function MinePage() {
               <Text>
                 <Text className={styles.price}>¥6.9</Text>
                 <Text className={styles.priceNote}>
-                  /月 起 · 前 500 名锁价（当前：{PLAN_LIST.find((p) => p.id === planId)?.label}）
+                  {t('mine.priceNote', { plan: t(PLAN_LABEL_KEY[planId]) })}
                 </Text>
               </Text>
             </View>
           </Picker>
           <Button className={styles.subButton} onClick={handleSubscribe}>
-            {paying ? '下单中…' : '立即订阅'}
+            {paying ? t('mine.subscribing') : t('mine.subscribe')}
           </Button>
         </View>
       </View>
 
       <View className={styles.quotaCard}>
-        <Text className={styles.quotaTitle}>本月额度</Text>
+        <Text className={styles.quotaTitle}>{t('mine.quotaTitle')}</Text>
         <View className={styles.quotaRow}>
           <View className={styles.quotaHead}>
-            <Text className={styles.quotaLabel}>🎙 语音对话</Text>
+            <Text className={styles.quotaLabel}>{t('mine.quotaVoice')}</Text>
             <Text className={styles.quotaValue}>
-              {usage ? (usage.voiceQuota < 0 ? '不限量' : `${usage.voiceUsed}/${usage.voiceQuota} 条`) : '…'}
+              {usage ? (usage.voiceQuota < 0 ? t('mine.unlimited') : `${usage.voiceUsed}/${usage.voiceQuota}${lang === 'zh' ? ' 条' : ''}`) : '…'}
             </Text>
           </View>
           <View className={styles.bar}>
@@ -228,12 +437,12 @@ function MinePage() {
         </View>
         <View className={styles.quotaRow}>
           <View className={styles.quotaHead}>
-            <Text className={styles.quotaLabel}>🔖 收藏空间</Text>
+            <Text className={styles.quotaLabel}>{t('mine.quotaFav')}</Text>
             <Text className={styles.quotaValue}>
               {usage
                 ? usage.collectionQuota < 0
-                  ? '不限量'
-                  : `${usage.collectionCount}/${usage.collectionQuota} 条`
+                  ? t('mine.unlimited')
+                  : `${usage.collectionCount}/${usage.collectionQuota}${lang === 'zh' ? ' 条' : ''}`
                 : '…'}
             </Text>
           </View>
@@ -246,58 +455,249 @@ function MinePage() {
         </View>
       </View>
 
-      <View className={styles.settingCard}>
-        <View className={styles.settingRow}>
-          <Text className={styles.settingLabel}>称呼</Text>
+      {/* 近期动态：最新 3 条日志（v2.0） */}
+      <View className={styles.logCard}>
+        <Text className={styles.logTitle}>{t('mine.recent')}</Text>
+        {logs.length > 0 ? (
+          logs.map((log) => (
+            <View className={styles.logRow} key={log.id}>
+              <Text className={styles.logIcon}>{log.icon}</Text>
+              <Text className={styles.logText}>{log.text}</Text>
+              <Text className={styles.logTime}>{fromNow(log.time)}</Text>
+            </View>
+          ))
+        ) : (
+          <Text className={styles.logEmpty}>
+            {t('mine.recentEmpty')}
+          </Text>
+        )}
+      </View>
+
+      {/* ===== 设置项（自独立设置页合并：通用 / AI 个性化 / 外观 / 账号与合规） ===== */}
+      <View className={styles.card}>
+        <Text className={styles.cardTitle}>{t('mine.settingGeneral')}</Text>
+        {renderRow(
+          t('mine.nickname'),
           <Input
-            className={styles.settingInput}
+            className={styles.input}
             value={nickname}
             maxlength={12}
+            placeholder={t('mine.nicknamePlaceholder')}
             onInput={(e) => setNickname(e.detail.value)}
             onBlur={handleBlurNickname}
           />
-        </View>
+        )}
         <Picker mode='time' value={profile?.briefingTime || '07:30'} onChange={handleChangeTime}>
-          <View className={styles.settingRow}>
-            <Text className={styles.settingLabel}>晨报推送时间</Text>
-            <View className={styles.settingValue}>
-              <Text>{profile?.briefingTime || '07:30'}</Text>
+          {renderRow(
+            t('mine.briefingTime'),
+            <>
+              <Text className={styles.valueText}>{profile?.briefingTime || '07:30'}</Text>
               <Text className={styles.arrow}>›</Text>
-            </View>
-          </View>
+            </>
+          )}
         </Picker>
+        {renderRow(
+          t('mine.briefingRemind'),
+          <Switch
+            checked={custom.morningReminderEnabled}
+            color={theme.color}
+            onChange={(e) => persistCustom({ morningReminderEnabled: e.detail.value })}
+          />
+        )}
       </View>
 
-      <View className={styles.settingCard}>
-        <View className={styles.settingRow}>
-          <Text className={styles.settingLabel}>界面颜色</Text>
+      <View className={styles.card}>
+        <Text className={styles.cardTitle}>{t('mine.settingAi')}</Text>
+        <View className={styles.row}>
+          <Text className={styles.rowLabel}>{t('mine.prefTags')}</Text>
+          <Text className={styles.valueHint}>{t('mine.prefMax')}</Text>
+        </View>
+        <View className={styles.tagList}>
+          {PREF_TAGS.map((tag) => (
+            <View
+              key={tag}
+              className={classnames(styles.tag, prefs.includes(tag) && styles.tagActive)}
+              onClick={() => handleTogglePref(tag)}
+            >
+              <Text className={classnames(styles.tagText, prefs.includes(tag) && styles.tagTextActive)}>
+                {t(PREF_TAG_LABEL[tag] || '')}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <Picker
+          mode='selector'
+          range={REPLY_STYLES.map((s) => t(REPLY_STYLE_LABEL[s]))}
+          value={REPLY_STYLES.indexOf(custom.replyStyle)}
+          onChange={handleReplyStyle}
+        >
+          {renderRow(
+            t('mine.replyStyle'),
+            <>
+              <Text className={styles.valueText}>{t(REPLY_STYLE_LABEL[custom.replyStyle] || '')}</Text>
+              <Text className={styles.arrow}>›</Text>
+            </>
+          )}
+        </Picker>
+        {renderRow(
+          t('mine.aiMemory'),
+          <>
+            <Text className={styles.valueText}>{memorySummary}</Text>
+            <Text className={styles.linkText} onClick={handleClearMemory}>
+              {t('mine.clear')}
+            </Text>
+          </>
+        )}
+        {renderRow(
+          t('mine.hotNews'),
+          <Switch
+            checked={custom.newsEnabled}
+            color={theme.color}
+            onChange={(e) => persistCustom({ newsEnabled: e.detail.value })}
+          />
+        )}
+      </View>
+
+      <View className={styles.card}>
+        <Text className={styles.cardTitle}>{t('mine.settingAppearance')}</Text>
+        <View className={styles.row}>
+          <Text className={styles.rowLabel}>{t('mine.uiColor')}</Text>
           <View className={styles.swatchList}>
-            {THEME_PRESETS.map((t) => (
+            {THEME_PRESETS.map((preset) => (
               <View
-                key={t.id}
-                className={classnames(styles.swatch, theme.id === t.id && styles.swatchActive)}
-                style={{ background: t.color }}
-                onClick={() => setTheme(t.id)}
+                key={preset.id}
+                className={classnames(styles.swatch, theme.id === preset.id && styles.swatchActive)}
+                style={{ background: preset.color }}
+                onClick={() => setTheme(preset.id)}
               >
-                {theme.id === t.id ? <Text className={styles.swatchCheck}>✓</Text> : null}
+                {theme.id === preset.id ? <Text className={styles.swatchCheck}>✓</Text> : null}
               </View>
             ))}
           </View>
         </View>
-        <View className={styles.settingRow} onClick={handleContactService}>
-          <Text className={styles.settingLabel}>联系客服</Text>
-          <View className={styles.settingValue}>
-            <Text>在线反馈与帮助</Text>
+        {/* 界面大小：H5 端通过 --ui-scale 调节 rem 基准，即时生效（weapp 端 rpx 字号暂不支持全局缩放） */}
+        {isH5 ? (
+          <View className={styles.row}>
+            <Text className={styles.rowLabel}>{t('mine.uiSize')}</Text>
+            <View className={styles.scaleList}>
+              {UI_SCALE_PRESETS.map((p) => (
+                <View
+                  key={p.id}
+                  className={classnames(styles.scaleChip, scaleId === p.id && styles.scaleChipActive)}
+                  onClick={() => setScale(p.id)}
+                >
+                  <Text className={classnames(styles.scaleText, scaleId === p.id && styles.scaleTextActive)}>
+                    {t(UI_SCALE_LABEL[p.id])}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+        {/* 语言切换：中 / EN，全局即时生效 */}
+        <View className={styles.row}>
+          <Text className={styles.rowLabel}>{t('mine.uiLang')}</Text>
+          <View className={styles.scaleList}>
+            {LANG_OPTIONS.map((opt) => (
+              <View
+                key={opt.id}
+                className={classnames(styles.scaleChip, lang === opt.id && styles.scaleChipActive)}
+                onClick={() => setLang(opt.id)}
+              >
+                <Text className={classnames(styles.scaleText, lang === opt.id && styles.scaleTextActive)}>
+                  {opt.label}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {/* 账号与合规（F18 提审硬门槛） */}
+      <View className={styles.card}>
+        <Text className={styles.cardTitle}>{t('mine.settingAccount')}</Text>
+        {renderRow(
+          t('mine.terms'),
+          <Text className={styles.arrow} onClick={() => setDocView('terms')}>
+            ›
+          </Text>,
+          () => setDocView('terms')
+        )}
+        {renderRow(
+          t('mine.privacy'),
+          <Text className={styles.arrow} onClick={() => setDocView('privacy')}>
+            ›
+          </Text>,
+          () => setDocView('privacy')
+        )}
+        {renderRow(
+          t('mine.aiNotice'),
+          <Text className={styles.arrow} onClick={() => setDocView('ai')}>
+            ›
+          </Text>,
+          () => setDocView('ai')
+        )}
+        {renderRow(
+          t('mine.privacyManage'),
+          <>
+            <Text className={styles.valueText}>{t('mine.manageAuth')}</Text>
             <Text className={styles.arrow}>›</Text>
+          </>,
+          handleOpenPrivacyManage
+        )}
+        <View className={styles.row}>
+          <Text className={styles.rowLabel}>{t('mine.service')}</Text>
+          <View className={styles.rowValue}>
+            <Text className={styles.linkText} onClick={handleContactService}>
+              {t('mine.feedback')}
+            </Text>
+          </View>
+        </View>
+        {renderRow(
+          t('mine.deleteAccount'),
+          <>
+            <Text className={styles.dangerText}>{t('mine.deleteData')}</Text>
+            <Text className={styles.arrow}>›</Text>
+          </>,
+          handleDeleteAccount
+        )}
+      </View>
+
+      {/* 其他入口 */}
+      <View className={styles.settingCard}>
+        <View className={styles.settingRow} onClick={() => Taro.navigateTo({ url: '/pages/shopping/index' })}>
+          <Text className={styles.settingLabel}>{t('mine.shopping')}</Text>
+          <View className={styles.settingValue}>
+            <Text>{t('mine.shoppingDesc')}</Text>
+            <Text className={styles.entryArrow}>›</Text>
           </View>
         </View>
       </View>
 
       <View className={styles.privacyCard}>
         <Text className={styles.privacyText}>
-          隐私说明：转发的内容仅用于生成你的日程、待办与摘要，存储于境内服务器；上线后将提供完整《小程序隐私保护指引》与一键删除全部数据入口。
+          {t('mine.privacyNote')}
         </Text>
       </View>
+
+      {/* 协议/隐私半屏查看层 */}
+      {docView ? (
+        <View className={styles.docMask} onClick={() => setDocView(null)}>
+          <View className={styles.docPanel} onClick={(e) => e.stopPropagation()}>
+            <Text className={styles.docTitle}>
+              {docView === 'terms' ? t('mine.terms') : docView === 'privacy' ? t('mine.privacy') : t('mine.aiNotice')}
+            </Text>
+            <ScrollView scrollY className={styles.docBody}>
+              <Text className={styles.docText}>
+                {docView === 'terms' ? TERMS_TEXT : docView === 'privacy' ? PRIVACY_TEXT : AI_SERVICES_TEXT}
+              </Text>
+            </ScrollView>
+            <Button className={styles.docClose} onClick={() => setDocView(null)}>
+              {t('mine.docRead')}
+            </Button>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }

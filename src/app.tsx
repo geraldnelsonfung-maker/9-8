@@ -1,10 +1,48 @@
-import React, { useEffect } from 'react';
-import Taro from '@tarojs/taro';
-import { useDidShow, useDidHide } from '@tarojs/taro';
+import React, { useEffect, useState } from 'react';
+import Taro, { useDidShow, useDidHide } from '@tarojs/taro';
+import AiAssistant from '@/components/AiAssistant';
+import { useLanguageStore, dict } from '@/store/language';
 // 全局样式
 import './app.scss';
 
+/** TabBar 文案：语言切换时同步更新（index 与 app.config.ts tabBar list 顺序一致） */
+const TAB_KEYS = ['tab.briefing', 'tab.inbox', 'tab.hotspot', 'tab.calendar', 'tab.mine'] as const;
+
+function syncTabBar(lang: 'zh' | 'en') {
+  TAB_KEYS.forEach((key, index) => {
+    try {
+      Taro.setTabBarItem({ index, text: dict[lang][key] });
+    } catch (err) {
+      console.warn(`[App] setTabBarItem #${index} failed:`, err);
+    }
+  });
+}
+
+/** 路由 → AI Context（用于主动建议提示语） */
+function routeToContext(route: string): string {
+  if (!route) return '';
+  if (route.includes('briefing')) return 'briefing';
+  if (route.includes('inbox')) return 'inbox';
+  if (route.includes('Library') || route.includes('library')) return 'hotspot';
+  if (route.includes('calendar')) return 'calendar';
+  if (route.includes('mine')) return 'mine';
+  if (route.includes('search')) return 'search';
+  if (route.includes('settings')) return 'settings';
+  if (route.includes('shopping')) return 'shopping';
+  if (route.includes('history')) return 'history';
+  return '';
+}
+
 function App(props) {
+  const [context, setContext] = useState('');
+  const lang = useLanguageStore((s) => s.lang);
+
+  // 语言变化（含恢复本地选择）时同步 TabBar 文案；延迟执行等 H5 TabBar 渲染就绪，否则刷新后仍为默认文案
+  useEffect(() => {
+    const timer = setTimeout(() => syncTabBar(lang), 300);
+    return () => clearTimeout(timer);
+  }, [lang]);
+
   useEffect(() => {
     // 云开发初始化：仅微信小程序平台启用（H5/其他平台走 mock 数据）
     if (process.env.TARO_ENV === 'weapp') {
@@ -17,13 +55,21 @@ function App(props) {
     }
   }, []);
 
-  // 对应 onShow
-  useDidShow(() => {});
+  // 对应 onShow：感知当前路由，让 AI 在不同界面给出不同主动建议
+  useDidShow(() => {
+    const pages = Taro.getCurrentPages();
+    const current = pages[pages.length - 1];
+    const route = current ? current.route || '' : '';
+    setContext(routeToContext(route));
+  });
 
-  // 对应 onHide
-  useDidHide(() => {});
-
-  return props.children;
+  return (
+    <React.Fragment>
+      {props.children}
+      {/* 晨报页有常驻输入栏（含快捷指令条），AI 悬浮球需额外抬升避让 */}
+      <AiAssistant context={context} offset={context === 'briefing' ? 240 : 40} />
+    </React.Fragment>
+  );
 }
 
 export default App;

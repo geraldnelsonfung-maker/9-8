@@ -5,6 +5,7 @@ import { apiGetBriefing, apiGetLibrary } from '@/services/api';
 import { formatEventTime } from '@/utils/date';
 import { brandVars, useThemeStore } from '@/store/theme';
 import type { Briefing, CollectionItem } from '@/types';
+import { useT } from '@/store/language';
 import styles from './index.module.scss';
 
 interface SearchResult {
@@ -14,6 +15,7 @@ interface SearchResult {
 }
 
 function SearchPage() {
+  const t = useT();
   const { theme } = useThemeStore();
   const [keyword, setKeyword] = useState('');
   const [briefing, setBriefing] = useState<Briefing | null>(null);
@@ -58,7 +60,7 @@ function SearchPage() {
         <Input
           className={styles.searchInput}
           value={keyword}
-          placeholder='搜索日程、待办、收藏…'
+          placeholder={t('search.placeholder')}
           focus
           confirmType='search'
           onInput={(e) => setKeyword(e.detail.value)}
@@ -68,12 +70,12 @@ function SearchPage() {
 
       {loading ? (
         <View className={styles.hint}>
-          <Text>加载中…</Text>
+          <Text>{t('search.loading')}</Text>
         </View>
       ) : !keyword.trim() ? (
         <View className={styles.hint}>
           <Text className={styles.hintIcon}>🔍</Text>
-          <Text>输入关键词，找回你存过的任何东西</Text>
+          <Text>{t('search.empty')}</Text>
         </View>
       ) : total === 0 ? (
         <View className={styles.hint}>

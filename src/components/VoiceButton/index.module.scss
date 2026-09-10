@@ -25,8 +25,19 @@
 }
 
 .recording {
-  background: $color-primary;
-  border-color: $color-primary;
+  background: var(--brand, #{$color-primary});
+  border-color: var(--brand, #{$color-primary});
+}
+
+.compact.button {
+  width: 72rpx;
+  height: $button-height-md;
+  min-width: 72rpx;
+  padding: 0;
+  gap: 0;
+  border-radius: $radius-button;
+  background: var(--brand-soft, #{$color-voice-bg});
+  border-color: transparent;
 }
 
 .disabled {

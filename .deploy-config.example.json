@@ -1,0 +1,9 @@
+{
+  "host": "你的服务器IP或域名",
+  "port": 22,
+  "user": "root",
+  "remoteDir": "/var/www/html",
+  "publicUrl": "https://你的域名或公网地址/",
+  "authType": "key",
+  "keyPath": "C:\\Users\\geral\\.ssh\\id_rsa"
+}
