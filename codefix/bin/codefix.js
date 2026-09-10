@@ -5,7 +5,7 @@
 //   codefix apply <branch>   把修复分支合并进当前分支
 //   codefix discard <branch> 丢弃修复分支
 import { parseArgs } from 'node:util';
-import { runTask, applyFix, discardFix, loadConfig, runVerify } from '../src/index.js';
+import { runTask, applyFix, discardFix, loadConfig, runVerify, loadEnvLocal } from '../src/index.js';
 
 const { values: flags, positionals } = parseArgs({
   allowPositionals: true,
