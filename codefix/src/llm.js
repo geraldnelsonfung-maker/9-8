@@ -125,5 +125,16 @@ export async function selectFiles(repoDir, allFiles, candidates, config) {
     total += f.content.length;
     if (picked.length >= 8) break;
   }
+  // 回退：错误信息不含文件路径时（如 tsc TS2688 隐式类型库错误），
+  // 提供配置类文件，让 LLM 有机会从 tsconfig/package.json 层面修复。
+  if (picked.length === 0) {
+    const CONFIG_RE = /(^|\/)(tsconfig[^/]*\.json|jsconfig[^/]*\.json|package\.json|babel\.config\.|\.babelrc)/i;
+    for (const f of allFiles) {
+      if (!CONFIG_RE.test(f.path)) continue;
+      if (total + f.content.length > config.maxFileBytes * 6) break;
+      picked.push(f);
+      total += f.content.length;
+    }
+  }
   return picked;
 }

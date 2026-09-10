@@ -3,5 +3,5 @@
 export default {
   verifyCommands: ['node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json'],
   maxRounds: 3,
-  allowPaths: ['src/', 'config/', 'cloudfunctions/'],
+  allowPaths: ['src/', 'config/', 'cloudfunctions/', 'tsconfig.json', 'package.json'],
 };

@@ -142,9 +142,9 @@ export async function runTask(repoDir, opts = {}) {
       result.worktreeDir = null;
     }
   } finally {
-    // dryRun 或异常时确保清理
+    // 异常时确保清理（走 removeWorktree，安全断开 node_modules 链接）
     if (result.worktreeDir && !result.passed) {
-      await rm(result.worktreeDir, { recursive: true, force: true }).catch(() => {});
+      await removeWorktree(repoDir, result.worktreeDir).catch(() => {});
     }
   }
 

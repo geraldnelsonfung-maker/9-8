@@ -70,15 +70,27 @@ html {
 // ============================================================
 // Taro H5 白屏兜底（重要，勿删）
 // ------------------------------------------------------------
-// 路由动画样式会把 .taro_page 平移到屏幕外（transform: translate(100%, 0)），
-// 需等 onLoad 回调注入 taro_page_show 类才滑回屏内；快速导航/慢环境下该回调
-// 存在竞态（Taro router/page.js 自带 FIXME：可能不执行回调导致白屏），输掉
-// 竞态即整页空白且 console 无任何报错。实测 Taro 4.1.9 的 h5.router.animation
-// 配置不生效（运行时读取顶层 config.animation），故此处直接用全局样式禁用
-// 屏外位移：页面栈显隐仍由 taro_page_shade(display:none) 正常控制，
-// 仅 H5 失去滑入过渡动画，小程序端不受影响。
+// 两套白屏机制，均已实测复现：
+// 1) 路由动画样式会把 .taro_page 平移到屏幕外（transform: translate(100%, 0)），
+//    需等 onLoad 回调注入 taro_page_show 类才滑回屏内；快速导航/慢环境下该回调
+//    存在竞态（Taro router/page.js 自带 FIXME：可能不执行回调导致白屏），输掉
+//    竞态即整页空白且 console 无任何报错。实测 Taro 4.1.9 的 h5.router.animation
+//    配置不生效（运行时 PageHandler 读取顶层 config.animation，见
+//    @tarojs/router/dist/index.esm.js L1192），故此处直接用全局样式禁用屏外位移。
+// 2) 路由内置规则（@tarojs/router/dist/style.js loadRouterStyle）：
+//    .taro_router > .taro_page.taro_page_show.taro_page_stationed
+//      :not(.taro_page_shade):not(.taro_tabbar_page):not(:last-child) { display: none }
+//    它假设 .taro_router 的最后一个子元素是栈顶页面，但 app.tsx 全局渲染的
+//    AI 助理悬浮球（AiAssistant）会排在该页面之后成为 last-child，导致所有
+//    非 TabBar 页面（购物清单/搜索/历史）被 display:none 整页隐藏。
+//    故强制显示「未被 shade 的非 tabbar 页面」：被遮挡页（带 shade）仍正常隐藏，
+//    栈顶页不再被误杀。仅 H5 生效，小程序端选择器不匹配无副作用。
 // ============================================================
 .taro_router > .taro_page {
   transform: none !important;
   transition: none !important;
+}
+
+.taro_router > .taro_page:not(.taro_page_shade):not(.taro_tabbar_page) {
+  display: block !important;
 }
