@@ -32,7 +32,11 @@ function help() {
   CODEFIX_LLM_BASE_URL  默认 https://api.deepseek.com/v1
   CODEFIX_LLM_MODEL     默认 deepseek-chat
   CODEFIX_LLM_MOCK      指向本地 mock 模块（演示/测试用）
-  CODEFIX_GIT           git 可执行文件路径`);
+  CODEFIX_GIT           git 可执行文件路径
+
+密钥文件:
+  在仓库根目录放 .env.local（KEY=VALUE），启动时自动加载且不会进 git。
+  例: CODEFIX_LLM_API_KEY=sk-xxxx`);
 }
 
 const command = positionals[0];
@@ -40,6 +44,7 @@ const command = positionals[0];
 async function main() {
   if (flags.help || !command) return help();
   const repo = flags.repo;
+  await loadEnvLocal(repo);
 
   if (command === 'check') {
     const config = await loadConfig(repo);

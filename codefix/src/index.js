@@ -2,3 +2,4 @@
 export { runTask, applyFix, discardFix } from './engine.js';
 export { loadConfig } from './config.js';
 export { runVerify, summarizeVerifyOutput } from './runner.js';
+export { loadEnvLocal } from './env.js';
