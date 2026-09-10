@@ -70,6 +70,39 @@ async function callOpenaiCompatible({ baseUrl, apiKey, model, userPrompt, jsonMo
   return data.choices[0].message.content;
 }
 
+// 从环境变量构建模型提供者列表（主模型 + fallback 模型）。
+// 主模型失败（HTTP 4xx/5xx/网络超时）时自动降级到 fallback。
+function buildProviders() {
+  const list = [];
+
+  // 主模型：CODEFIX_LLM_*  或 DEEPSEEK_API_KEY
+  const mainKey =
+    process.env.CODEFIX_LLM_API_KEY || process.env.DEEPSEEK_API_KEY;
+  if (mainKey) {
+    list.push({
+      name: 'primary',
+      apiKey: mainKey,
+      baseUrl: process.env.CODEFIX_LLM_BASE_URL || 'https://api.deepseek.com/v1',
+      model: process.env.CODEFIX_LLM_MODEL || 'deepseek-chat',
+      jsonMode: process.env.CODEFIX_LLM_JSON_MODE !== 'false',
+    });
+  }
+
+  // 备用模型：CODEFIX_LLM_FALLBACK_*
+  const fbKey = process.env.CODEFIX_LLM_FALLBACK_API_KEY;
+  if (fbKey) {
+    list.push({
+      name: 'fallback',
+      apiKey: fbKey,
+      baseUrl: process.env.CODEFIX_LLM_FALLBACK_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4',
+      model: process.env.CODEFIX_LLM_FALLBACK_MODEL || 'glm-4.7-flash',
+      jsonMode: process.env.CODEFIX_LLM_FALLBACK_JSON_MODE !== 'false',
+    });
+  }
+
+  return list;
+}
+
 // 主入口：给定验证输出与候选文件，返回 { summary, patches }
 export async function requestFixes({ verifyText, files, round, goal }) {
   const userPrompt = buildUserPrompt({ verifyText, files, round, goal });
@@ -81,24 +114,33 @@ export async function requestFixes({ verifyText, files, round, goal }) {
     return mod.default({ verifyText, files, round, goal, userPrompt, parseJsonReply });
   }
 
-  const apiKey =
-    process.env.CODEFIX_LLM_API_KEY ||
-    process.env.DEEPSEEK_API_KEY ||
-    process.env.HUNYUAN_API_KEY;
-  if (!apiKey) {
+  const providers = buildProviders();
+  if (providers.length === 0) {
     throw new Error(
-      '未配置 LLM：请在 .env.local 或环境变量设置 CODEFIX_LLM_API_KEY' +
-        '（也兼容 DEEPSEEK_API_KEY / HUNYUAN_API_KEY），' +
+      '未配置 LLM：请在 .env.local 设置 CODEFIX_LLM_API_KEY（主模型）' +
+        '和 CODEFIX_LLM_FALLBACK_API_KEY（备用），' +
         '或用 CODEFIX_LLM_MOCK=<mock脚本路径> 注入本地 mock。'
     );
   }
-  const baseUrl =
-    process.env.CODEFIX_LLM_BASE_URL || 'https://api.deepseek.com/v1';
-  const model = process.env.CODEFIX_LLM_MODEL || 'deepseek-chat';
-  const jsonMode = process.env.CODEFIX_LLM_JSON_MODE !== 'false';
 
-  const reply = await callOpenaiCompatible({ baseUrl, apiKey, model, userPrompt, jsonMode });
-  return parseJsonReply(reply);
+  let lastErr;
+  for (const p of providers) {
+    try {
+      const reply = await callOpenaiCompatible({
+        baseUrl: p.baseUrl, apiKey: p.apiKey, model: p.model,
+        userPrompt, jsonMode: p.jsonMode,
+      });
+      return parseJsonReply(reply);
+    } catch (err) {
+      lastErr = err;
+      // 只在还有下一个 provider 时才降级
+      const idx = providers.indexOf(p);
+      if (idx < providers.length - 1) {
+        console.error(`[codefix] ${p.name} 失败，降级到 ${providers[idx + 1].name}: ${err.message}`);
+      }
+    }
+  }
+  throw lastErr;
 }
 
 // 从验证输出里猜测相关文件（错误信息中出现的仓库相对路径）

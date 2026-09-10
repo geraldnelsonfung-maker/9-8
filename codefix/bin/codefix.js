@@ -28,11 +28,14 @@ function help() {
   codefix discard <branch> [--repo <dir>]        丢弃修复分支
 
 环境变量:
-  CODEFIX_LLM_API_KEY   DeepSeek/OpenAI 兼容 key（或 DEEPSEEK_API_KEY）
-  CODEFIX_LLM_BASE_URL  默认 https://api.deepseek.com/v1
-  CODEFIX_LLM_MODEL     默认 deepseek-chat
-  CODEFIX_LLM_MOCK      指向本地 mock 模块（演示/测试用）
-  CODEFIX_GIT           git 可执行文件路径
+  CODEFIX_LLM_API_KEY          DeepSeek key（主力）
+  CODEFIX_LLM_BASE_URL         默认 https://api.deepseek.com/v1
+  CODEFIX_LLM_MODEL            默认 deepseek-chat
+  CODEFIX_LLM_FALLBACK_API_KEY   智谱 GLM key（备用，主力失败自动降级）
+  CODEFIX_LLM_FALLBACK_BASE_URL  默认 https://open.bigmodel.cn/api/paas/v4
+  CODEFIX_LLM_FALLBACK_MODEL     默认 glm-4.7-flash
+  CODEFIX_LLM_MOCK             指向本地 mock 模块（演示/测试用）
+  CODEFIX_GIT                  git 可执行文件路径
 
 密钥文件:
   在仓库根目录放 .env.local（KEY=VALUE），启动时自动加载且不会进 git。
