@@ -183,6 +183,8 @@ function handleBatchSchedule(msg: string): string {
   }
   return '批量排班可以这样说：「把周会固定到每周二上午」，或「下周一站会、周三评审、周五复盘」。';
 }
+
+/** 购物相关关键词命中 */
 function matchShopping(msg: string): boolean {
   return /买|购买|入手|比一比|对比|哪个.划算|划算|值不值|值不值得|性价比|什么牌子|求推荐|预算|买什么/.test(msg);
 }
