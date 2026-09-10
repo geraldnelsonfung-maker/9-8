@@ -59,12 +59,16 @@ export async function applyPatches(worktreeDir, patches, config) {
         rejected.push({ file: rel, why: 'oldText 模式要求文件已存在' });
         continue;
       }
-      if (!before.includes(patch.oldText)) {
+      // 归一化换行符后匹配（CRLF → LF）
+      const normBefore = before.replace(/\r\n/g, '\n');
+      const normOld = patch.oldText.replace(/\r\n/g, '\n');
+      if (!normBefore.includes(normOld)) {
         rejected.push({ file: rel, why: 'oldText 在文件中未找到精确匹配' });
         continue;
       }
-      const after = before.replace(patch.oldText, patch.newText);
-      if (after === before) {
+      const normNew = patch.newText.replace(/\r\n/g, '\n');
+      const after = normBefore.replace(normOld, normNew);
+      if (after === normBefore) {
         continue; // 无变化
       }
       await writeFile(abs, after, 'utf8');

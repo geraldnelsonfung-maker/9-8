@@ -87,7 +87,102 @@ export default function chat(data?: {
   return { reply, action: 'none' };
 }
 
-/** 购物相关关键词命中 */
+/* ---------------- F24 批量/周期排班（自然语言批量排班） ---------------- */
+
+/** 时间段词 → 默认时刻（无显式时间时兜底 09:00） */
+function slotToTime(text: string): string {
+  if (/下午/.test(text)) return '14:00';
+  if (/中午|午间/.test(text)) return '12:00';
+  if (/傍晚/.test(text)) return '18:00';
+  if (/晚上|晚间/.test(text)) return '19:00';
+  if (/上午|早上|早晨/.test(text)) return '09:00';
+  const hm = text.match(/(\d{1,2})[点:：]\s*(半|\d{1,2})?/);
+  if (hm) {
+    let hh = Number(hm[1]);
+    const mm = hm[2] === '半' ? 30 : Number(hm[2] || 0);
+    if (hh < 12 && /下午|晚上|傍晚/.test(text)) hh += 12;
+    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  }
+  return '09:00';
+}
+
+/** 周[一..日] → 距今天数；恰逢今天且时刻已过则顺延一周 */
+function weekdayOffset(word: string, slot: string): number {
+  const map: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 0, 天: 0 };
+  const target = map[word] ?? 1;
+  const diff = (target - dayjs().day() + 7) % 7;
+  if (diff > 0) return diff;
+  return dayjs().format('HH:mm') < slot ? 0 : 7;
+}
+
+/** 批量排班意图命中：固定每周会议，或一句话含 ≥2 个带时间的条目 */
+function matchBatchSchedule(msg: string): boolean {
+  if (/固定到|固定在|定为|改成每周|每周|每个周/.test(msg) && /周[一二三四五六日天]/.test(msg)) return true;
+  const timed = msg
+    .split(/[，、；]/)
+    .filter((c) => /周[一二三四五六日天]|\d{1,2}[点:：]/.test(c)).length;
+  return timed >= 2 && /排|安排|约/.test(msg);
+}
+
+/** 从「把XX固定到每周二上午」提炼会议名：取锚点前文本并剔除口语词 */
+function extractBatchTitle(msg: string, anchorIndex: number): string {
+  return msg
+    .slice(0, anchorIndex)
+    .replace(/帮我?|请|麻烦|把|将|要|想|下?本?这?周[一二三四五六日天]?|每[周个]([一二三四五六日天])?/g, '')
+    .trim()
+    .slice(0, 16);
+}
+
+/** 批量/周期排班：固定会议排未来 4 次；多条目逐条排入（上限 6 条） */
+function handleBatchSchedule(msg: string): string {
+  const plan = readPlan();
+  const created: string[] = [];
+
+  // 1) 周期固定：把「周会」固定到（每周）周二上午 → 未来 4 次
+  const anchor = msg.match(/固定到|固定在|定为|改成每周|每周|每个周/);
+  if (anchor && anchor.index !== undefined) {
+    const tail = msg.slice(anchor.index);
+    const wm = tail.match(/周([一二三四五六日天])/);
+    if (wm) {
+      const title = extractBatchTitle(msg, anchor.index) || '例会';
+      const slot = slotToTime(tail);
+      const offset0 = weekdayOffset(wm[1], slot);
+      for (let i = 0; i < 4; i++) {
+        const start = `${dayjs().add(offset0 + i * 7, 'day').format('YYYY-MM-DD')} ${slot}`;
+        plan.events.push({ id: nextId('evt'), title, startTime: start, status: 'confirmed', source: 'AI 批量排班' });
+        created.push(start);
+      }
+      writePlan(plan);
+      return [
+        `📅 已把「${title}」固定为每周${wm[1]}，未来 4 次已排入：`,
+        ...created.map((s) => `· ${s}`),
+        '日历页可查看忙闲分布，晨报会按天提醒。'
+      ].join('\n');
+    }
+  }
+
+  // 2) 一句话多条：下周一上午站会、周三下午评审、周五复盘
+  const clauses = msg.split(/[，、；]/).map((c) => c.trim()).filter(Boolean);
+  for (const clause of clauses) {
+    const m = clause.match(/周([一二三四五六日天])\s*(上午|早上|中午|下午|傍晚|晚上|\d{1,2}[点:：]\s*(?:半|\d{1,2})?)?/);
+    if (!m) continue;
+    const slot = slotToTime(m[2] || '上午');
+    const date = dayjs().add(weekdayOffset(m[1], slot), 'day').format('YYYY-MM-DD');
+    const title = clause
+      .replace(/周[一二三四五六日天]\s*(上午|早上|中午|下午|傍晚|晚上|\d{1,2}[点:：]\s*(?:半|\d{1,2})?)?/g, '')
+      .replace(/帮我?排|安排|开个?|约个?|把|将|一下|这个|下周|这周|本周/g, '')
+      .trim()
+      .slice(0, 16);
+    if (!title) continue;
+    plan.events.push({ id: nextId('evt'), title, startTime: `${date} ${slot}`, status: 'confirmed', source: 'AI 批量排班' });
+    created.push(`${date} ${slot} 「${title}」`);
+  }
+  if (created.length) {
+    writePlan(plan);
+    return [`📅 已批量排入 ${created.length} 条日程：`, ...created.map((s) => `· ${s}`), '日历页可查看忙闲分布。'].join('\n');
+  }
+  return '批量排班可以这样说：「把周会固定到每周二上午」，或「下周一站会、周三评审、周五复盘」。';
+}
 function matchShopping(msg: string): boolean {
   return /买|购买|入手|比一比|对比|哪个.划算|划算|值不值|值不值得|性价比|什么牌子|求推荐|预算|买什么/.test(msg);
 }
