@@ -26,9 +26,13 @@
   pointer-events: auto;
   transition: transform $transition-fast;
   animation: ai-pulse 2.4s ease-in-out infinite;
+  // 可拖动：阻止触屏拖球时浏览器把手势判定为页面滚动
+  touch-action: none;
+  cursor: grab;
 
   &:active {
     transform: scale(0.94);
+    cursor: grabbing;
   }
 }
 
