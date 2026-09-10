@@ -2,13 +2,15 @@
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-// allowPaths 前缀匹配（支持尾部 *）
+// allowPaths 前缀匹配（支持尾部 * 和尾部 /）
 function matchAllow(relPath, allowPaths) {
   if (!allowPaths || allowPaths.length === 0) return true;
   const p = relPath.toLowerCase();
   return allowPaths.some((a) => {
-    const g = a.toLowerCase().replace(/\*\*/g, '*');
+    let g = a.toLowerCase().replace(/\*\*/g, '*');
     if (g.endsWith('*')) return p.startsWith(g.slice(0, -1));
+    // 统一去掉尾部 /，再判断前缀
+    g = g.replace(/\/+$/, '');
     return p === g || p.startsWith(g + '/');
   });
 }

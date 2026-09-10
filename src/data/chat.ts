@@ -64,7 +64,9 @@ export default function chat(data?: {
   }
 
   let reply = '好的，已收到你的指令。';
-  if (/帮我安排|排一下|帮我约|重新排|排班/.test(msg))
+  // F24 批量/周期排班：固定每周会议、一句话多条日程（优先于单条排班建议）
+  if (matchBatchSchedule(msg)) reply = handleBatchSchedule(msg);
+  else if (/帮我安排|排一下|帮我约|重新排|排班/.test(msg))
     reply =
       '我对照了你的日程：周五 14:00-16:00 有「和设计师对齐视觉稿」，你说的会建议排到 16:30-17:30，刚好留出缓冲。\n回复「确认」我就写入日程，或告诉我别的时段。';
   else if (/确认|就这么排/.test(msg)) reply = '已写入日程：本周五 16:30-17:30，晨报会同步更新。';
