@@ -43,22 +43,25 @@ export function parseJsonReply(text) {
   return JSON.parse(candidate.slice(start, end + 1));
 }
 
-async function callOpenaiCompatible({ baseUrl, apiKey, model, userPrompt }) {
-  const res = await fetch(baseUrl + '/chat/completions', {
+async function callOpenaiCompatible({ baseUrl, apiKey, model, userPrompt, jsonMode }) {
+  const payload = {
+    model,
+    temperature: 0,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt },
+    ],
+  };
+  // 部分 OpenAI 兼容服务（或某些模型）不支持 response_format，
+  // 用 CODEFIX_LLM_JSON_MODE=false 关闭，靠 prompt + 容错提取 JSON。
+  if (jsonMode) payload.response_format = { type: 'json_object' };
+  const res = await fetch(baseUrl.replace(/\/+$/, '') + '/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: 'Bearer ' + apiKey,
     },
-    body: JSON.stringify({
-      model,
-      temperature: 0,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-    }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     throw new Error(`LLM HTTP ${res.status}: ${(await res.text()).slice(0, 500)}`);
@@ -78,18 +81,23 @@ export async function requestFixes({ verifyText, files, round, goal }) {
     return mod.default({ verifyText, files, round, goal, userPrompt, parseJsonReply });
   }
 
-  const apiKey = process.env.CODEFIX_LLM_API_KEY || process.env.DEEPSEEK_API_KEY;
+  const apiKey =
+    process.env.CODEFIX_LLM_API_KEY ||
+    process.env.DEEPSEEK_API_KEY ||
+    process.env.HUNYUAN_API_KEY;
   if (!apiKey) {
     throw new Error(
-      '未配置 LLM：请设置环境变量 CODEFIX_LLM_API_KEY（或 DEEPSEEK_API_KEY），' +
+      '未配置 LLM：请在 .env.local 或环境变量设置 CODEFIX_LLM_API_KEY' +
+        '（也兼容 DEEPSEEK_API_KEY / HUNYUAN_API_KEY），' +
         '或用 CODEFIX_LLM_MOCK=<mock脚本路径> 注入本地 mock。'
     );
   }
   const baseUrl =
     process.env.CODEFIX_LLM_BASE_URL || 'https://api.deepseek.com/v1';
   const model = process.env.CODEFIX_LLM_MODEL || 'deepseek-chat';
+  const jsonMode = process.env.CODEFIX_LLM_JSON_MODE !== 'false';
 
-  const reply = await callOpenaiCompatible({ baseUrl, apiKey, model, userPrompt });
+  const reply = await callOpenaiCompatible({ baseUrl, apiKey, model, userPrompt, jsonMode });
   return parseJsonReply(reply);
 }
 
