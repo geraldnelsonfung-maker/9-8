@@ -21,6 +21,29 @@ const TYPE_ICONS: Record<CollectionItem['sourceType'], string> = {
 
 const HISTORY_KEY = 'browseHistory';
 const HISTORY_LIMIT = 50;
+const NEWS_FEEDBACK_KEY = 'newsFeedback';
+
+/** 读取本地资讯反馈记录 */
+function readNewsFeedback(): Record<string, 'up' | 'down'> {
+  try {
+    return Taro.getStorageSync(NEWS_FEEDBACK_KEY) || {};
+  } catch (err) {
+    console.warn('[LibraryPage] read newsFeedback failed:', err);
+    return {};
+  }
+}
+
+/** 资讯反馈云端落库（真机生效，失败静默） */
+async function apiNewsFeedback(id: string, value: 'up' | 'down'): Promise<void> {
+  try {
+    await Taro.cloud?.callFunction({
+      name: 'newsFeedback',
+      data: { id, value }
+    });
+  } catch (err) {
+    console.warn('[LibraryPage] apiNewsFeedback failed:', err);
+  }
+}
 
 /** 记录浏览历史（v2.0，点头像在「我的-浏览历史」查看） */
 export function recordBrowseHistory(entry: { id: string; title: string; source?: string }) {
