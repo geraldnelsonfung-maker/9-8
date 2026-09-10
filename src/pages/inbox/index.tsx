@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, Textarea, Input, Button, Image } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import dayjs from 'dayjs';

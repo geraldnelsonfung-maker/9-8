@@ -1,4 +1,3 @@
-import React from 'react';
 import { Text } from '@tarojs/components';
 import classnames from 'classnames';
 import styles from './index.module.scss';

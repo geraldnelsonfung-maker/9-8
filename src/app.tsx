@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import Taro, { useDidShow, useDidHide } from '@tarojs/taro';
+import Taro, { useDidShow } from '@tarojs/taro';
 import AiAssistant from '@/components/AiAssistant';
 import { useLanguageStore, dict } from '@/store/language';
 // 全局样式

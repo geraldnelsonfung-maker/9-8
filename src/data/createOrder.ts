@@ -1,4 +1,3 @@
-import dayjs from 'dayjs';
 import type { PayOrder } from '../types';
 
 /** mock: createOrder —— 模拟创建订阅订单（开发环境不下真实支付） */
