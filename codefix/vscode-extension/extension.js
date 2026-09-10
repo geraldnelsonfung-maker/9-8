@@ -17,6 +17,9 @@ function resolveCli() {
   // 默认：插件与 codefix 仓库同仓（vscode-extension 的上一级就是仓库根）
   const guess = path.join(__dirname, '..', 'bin', 'codefix.js');
   if (fs.existsSync(guess)) return guess;
+  // 打包进 vsix 的自带引擎（engine/bin/codefix.js）
+  const bundled = path.join(__dirname, 'engine', 'bin', 'codefix.js');
+  if (fs.existsSync(bundled)) return bundled;
   throw new Error('未找到 codefix CLI。请设置 codefix.cliPath 指向 bin/codefix.js。');
 }
 
