@@ -142,6 +142,9 @@ const zh = {
   'library.favTitle': '我的收藏',
   'library.favHint': '转发内容的 AI 摘要归档',
   'library.searchPlaceholder': '搜索热点和收藏',
+  'library.feedbackSaved': '已记录，内容将更贴合你',
+  'library.feedbackUp': '有用',
+  'library.feedbackDown': '不感兴趣',
 
   'calendar.legendSchedule': '日程',
   'calendar.legendTodo': '待办',

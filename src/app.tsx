@@ -72,5 +72,4 @@ function App(props) {
   );
 }
 
-const __codefix_test_unused = 42;
 export default App;

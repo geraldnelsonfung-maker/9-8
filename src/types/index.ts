@@ -56,6 +56,16 @@ export interface BriefingIntel {
   degraded?: boolean;
 }
 
+/** 晨报自适应信号（F21） */
+export interface BriefingAdaptive {
+  /** 日程爆满（≥4 项或总时长 ≥5h） */
+  busyDay: boolean;
+  /** 次日外地行程目的地城市 */
+  tripCity: string | null;
+  /** 高优待办标题 */
+  focusTodo: string | null;
+}
+
 /** 晨报 */
 export interface Briefing {
   /** 'YYYY-MM-DD' */
