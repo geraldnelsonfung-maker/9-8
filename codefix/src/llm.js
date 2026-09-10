@@ -67,7 +67,11 @@ async function callOpenaiCompatible({ baseUrl, apiKey, model, userPrompt, jsonMo
     throw new Error(`LLM HTTP ${res.status}: ${(await res.text()).slice(0, 500)}`);
   }
   const data = await res.json();
-  return data.choices[0].message.content;
+  const content = data.choices[0].message.content;
+  if (process.env.CODEFIX_DEBUG) {
+    console.error('[debug] LLM response length:', content.length, 'first 200:', content.slice(0, 200));
+  }
+  return content;
 }
 
 // 从环境变量构建模型提供者列表（主模型 + fallback 模型）。
